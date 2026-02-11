@@ -1,0 +1,17 @@
+name: crypto_bot
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pandas
+  - pandas-ta
+  - python-dotenv
+  - schedule
+  - scikit-learn
+  - matplotlib
+  - gymnasium
+  - stable-baselines3
+  - shimmy
+  - pytorch
+  - ccxt-py

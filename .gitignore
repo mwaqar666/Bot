@@ -1,0 +1,14 @@
+# Environment File
+.env
+
+# Genrated Graphs & Images
+*.png
+
+# Datasets
+*.csv
+
+# Trained Models
+*.zip
+
+# Genrated Python Files
+*.pyc
