@@ -26,8 +26,7 @@ def check_for_signal(df: pd.DataFrame, config) -> TradeSignal:
     if df.empty or len(df) < 50:  # Ensure enough data for indicators
         return TradeSignal("none", 0, 0, 0, "Not enough data")
 
-    # Get the latest completed candle (row -1 might be current potentially incomplete candle, so use -2 for safety if fetching live but usually -1 is fine if we fetch closed candles)
-    # We will assume df contains closed candles.
+    # Get the latest completed candle
     current = df.iloc[-1]
 
     # --- Trend Condition ---

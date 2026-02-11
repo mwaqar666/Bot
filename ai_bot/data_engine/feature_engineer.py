@@ -2,7 +2,7 @@ import config
 import pandas as pd
 import pandas_ta as ta
 import numpy as np
-from typing import List, Dict, Optional
+from typing import List
 
 
 class FeatureEngineer:
@@ -10,15 +10,12 @@ class FeatureEngineer:
     Transforms raw OHLCV data into a state vector for the AI.
     """
 
-    def process_data(
-        self, df: pd.DataFrame, additional_dfs: Optional[Dict[str, pd.DataFrame]] = None
-    ) -> pd.DataFrame:
+    def process_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Main pipeline:
         1. Clean Data
         2. Add Indicators (Base Timeframe)
-        3. Add Multi-Timeframe Context (if provided)
-        4. Normalize/Scale
+        3. Normalize/Scale
         """
         df = df.copy()
 
@@ -27,14 +24,9 @@ class FeatureEngineer:
         df = self._add_volume_features(df)
         df = self._add_time_features(df)
 
-        # Merge Higher Timeframe Context
-        if additional_dfs:
-            df = self._merge_higher_timeframes(df, additional_dfs)
-
         df = self._add_lagged_features(df)
         df = self._normalize_features(df)
 
-        # Drop NaNs created by indicators & merging
         df.dropna(inplace=True)
 
         return df
@@ -104,63 +96,6 @@ class FeatureEngineer:
         df["cos_day"] = np.cos(2 * np.pi * df.index.dayofweek / 7)
         return df
 
-    def _merge_higher_timeframes(
-        self, df: pd.DataFrame, additional_dfs: Dict[str, pd.DataFrame]
-    ) -> pd.DataFrame:
-        """
-        Merges 1h/4h context into 15m dataframe.
-        CRITICAL: Uses 'shift(1)' + 'ffill' to avoid lookahead bias.
-        """
-        print(f"DEBUG: Merging Higher Timeframes... (Base {len(df)} rows)")
-
-        for tf_name, tf_df in additional_dfs.items():
-            print(f"  > Processing {tf_name} ({len(tf_df)} rows)...")
-
-            # 1. Calculate indicators on the HTF dataframe first!
-            # Context Trend
-            ema_fast = ta.ema(tf_df["close"], length=12)
-            ema_slow = ta.ema(tf_df["close"], length=26)
-            tf_df[f"trend_{tf_name}"] = (ema_fast > ema_slow).astype(int)
-
-            # Context Momentum
-            tf_df[f"rsi_{tf_name}"] = ta.rsi(tf_df["close"], length=14) / 100.0
-
-            # Context Volatility
-            tf_df[f"atr_{tf_name}"] = ta.atr(
-                tf_df["high"], tf_df["low"], tf_df["close"], length=14
-            )
-            tf_df[f"volatility_{tf_name}"] = tf_df[f"atr_{tf_name}"] / tf_df["close"]
-
-            # 2. Select only the columns we want to merge
-            cols_to_merge = [
-                f"trend_{tf_name}",
-                f"rsi_{tf_name}",
-                f"volatility_{tf_name}",
-            ]
-            subset = tf_df[cols_to_merge].copy()
-
-            # 3. Shift Logic (The "Anti-Cheat" Mechanism)
-            # We shift HTF data forward by 1 period.
-            # Row 10:00 (which contains 10:00-11:00 data) becomes Row 11:00.
-            # So at 11:00, we see the 10:00-11:00 data. Safe.
-            subset_shifted = subset.shift(1)
-
-            # 4. Merge
-            # Left join on index (timestamp)
-            df = df.join(subset_shifted, how="left")
-
-            # 5. Forward Fill
-            # Propagate the 1h data to the 15m, 30m, 45m marks
-            before_fill = df[cols_to_merge].isna().sum().sum()
-            df[cols_to_merge] = df[cols_to_merge].ffill()
-            after_fill = df[cols_to_merge].isna().sum().sum()
-
-            print(
-                f"    Merged {tf_name}: Filled {before_fill - after_fill} NaNs. Remaining NaNs: {after_fill}"
-            )
-
-        return df
-
     def _add_lagged_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Adds memory features"""
         df["log_ret"] = np.log(df["close"] / df["close"].shift(1))
@@ -198,7 +133,7 @@ class FeatureEngineer:
         Now includes: RVOL + HTF Context (Trend, RSI, Volatility per merged timeframe).
         This is dynamic based on merged columns availability if needed, but we hardcode expectation.
         """
-        base_features = [
+        return [
             "log_ret_norm",
             "rsi_norm",
             "ema_spread",
@@ -217,18 +152,3 @@ class FeatureEngineer:
             "cos_day",
             "log_ret_4",
         ]
-
-        # We assume 30m, 1h and 4h are merged for "production" model
-        htf_features = [
-            "trend_30m",
-            "rsi_30m",
-            "volatility_30m",
-            "trend_1h",
-            "rsi_1h",
-            "volatility_1h",
-            "trend_4h",
-            "rsi_4h",
-            "volatility_4h",
-        ]
-
-        return base_features + htf_features

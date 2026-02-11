@@ -28,12 +28,11 @@ class AI_Analyst:
         except Exception as e:
             print(f"Failed to load AI model: {e}")
 
-    def analyze(self, df: pd.DataFrame, additional_dfs: Dict[str, pd.DataFrame] = None):
+    def analyze(self, df: pd.DataFrame):
         """
         Analyzes the market data and returns a trading signal.
         Args:
             df: 15m Dataframe
-            additional_dfs: Dict of {'30m': df, '1h': df, '4h': df}
         Returns:
             action (str): 'buy', 'sell', 'hold'
             confidence (float): Probability of the action
@@ -44,7 +43,7 @@ class AI_Analyst:
         try:
             # Feature Engineering (Level 2 Max)
             # We must pass the context dataframes here!
-            df_processed = self.engineer.process_data(df, additional_dfs=additional_dfs)
+            df_processed = self.engineer.process_data(df)
 
             # Get the latest state
             latest_state = df_processed.iloc[-1].values

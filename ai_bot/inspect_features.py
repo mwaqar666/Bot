@@ -14,6 +14,7 @@ from ai_bot.backtest import load_and_process_data
 class FeatureInspector(FeatureEngineer):
     """
     Extends FeatureEngineer to verify distributions and visualize feature relationships.
+    Train and compare the results across multiple short timeframes.
     """
 
     def inspect_and_plot(self, csv_path: str):

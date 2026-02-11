@@ -39,14 +39,14 @@ class TradingBot:
         print(f"\n--- Bot Cycle Started at {datetime.now().strftime('%H:%M:%S')} ---")
 
         # 1. Fetch Data
-        df, context_dfs = self._fetch_market_data()
+        df = self._fetch_market_data()
         if df.empty:
             print("Error: Could not fetch data. Skipping cycle.")
             return
 
         # 2. Analyze
         df = calculate_technical_indicators(df)
-        algo_signal, ai_decision, ai_conf = self._analyze_market(df, context_dfs)
+        algo_signal, ai_decision, ai_conf = self._analyze_market(df)
 
         print(
             f"ALGO: {algo_signal.direction.upper()} | AI: {ai_decision.upper()} (Conf: {ai_conf:.2f})"
@@ -60,32 +60,20 @@ class TradingBot:
         else:
             self._check_for_entry(algo_signal, ai_decision)
 
-    def _fetch_market_data(self) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+    def _fetch_market_data(self) -> pd.DataFrame:
         """Fetches base 15m data and additional context timeframes."""
         # 1. Fetch Base Data
         df = self.executor.fetch_ohlcv(self.symbol, self.timeframe)
 
-        # 2. Fetch Context Data
-        context_dfs = {}
-        for tf in ["30m", "1h", "4h"]:
-            try:
-                ctx_df = self.executor.fetch_ohlcv(self.symbol, tf, limit=100)
-                if not ctx_df.empty:
-                    context_dfs[tf] = ctx_df
-            except Exception as e:
-                print(f"Warning: Could not fetch {tf}: {e}")
+        return df
 
-        return df, context_dfs
-
-    def _analyze_market(
-        self, df: pd.DataFrame, context_dfs: Dict
-    ) -> Tuple[TradeSignal, str, float]:
+    def _analyze_market(self, df: pd.DataFrame) -> Tuple[TradeSignal, str, float]:
         """Gets signals from Strategy (Algo) and AI."""
         # Algo Signal
         algo_signal = check_for_signal(df, config)
 
         # AI Signal
-        ai_decision, ai_conf = self.ai_analyst.analyze(df, additional_dfs=context_dfs)
+        ai_decision, ai_conf = self.ai_analyst.analyze(df)
 
         return algo_signal, ai_decision, ai_conf
 
