@@ -1,14 +1,8 @@
-import sys
-import os
-import argparse
+from framework.data_engine.feature_engineer import FeatureEngineer
+from framework.testing.backtest import load_and_process_data
+
 import pandas as pd
 import matplotlib.pyplot as plt
-
-# Add parent path
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
-from ai_bot.data_engine.feature_engineer import FeatureEngineer
-from ai_bot.backtest import load_and_process_data
 
 
 class FeatureInspector(FeatureEngineer):
@@ -46,18 +40,14 @@ class FeatureInspector(FeatureEngineer):
         print("Generating Price Chart...")
         data = df.iloc[-1000:]
 
-        fig, (ax1, ax2) = plt.subplots(
-            2, 1, figsize=(15, 8), sharex=True, gridspec_kw={"height_ratios": [3, 1]}
-        )
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 8), sharex=True, gridspec_kw={"height_ratios": [3, 1]})
 
         # Price
         x_axis = range(len(data))
 
         ax1.plot(x_axis, data["close"], label="Close Price", color="black")
         if "ema_fast" in data.columns:
-            ax1.plot(
-                x_axis, data["ema_fast"], label="EMA Fast", color="green", alpha=0.5
-            )
+            ax1.plot(x_axis, data["ema_fast"], label="EMA Fast", color="green", alpha=0.5)
         if "ema_slow" in data.columns:
             ax1.plot(x_axis, data["ema_slow"], label="EMA Slow", color="red", alpha=0.5)
 
@@ -78,11 +68,7 @@ class FeatureInspector(FeatureEngineer):
 
     def _print_stats(self, df: pd.DataFrame, features: list):
         print("\n--- Feature Statistics ---")
-        stats = (
-            df[features]
-            .describe()
-            .T[["min", "max", "mean", "std", "25%", "50%", "75%"]]
-        )
+        stats = df[features].describe().T[["min", "max", "mean", "std", "25%", "50%", "75%"]]
         pd.set_option("display.max_rows", None)
         print(stats)
 
@@ -144,15 +130,11 @@ class FeatureInspector(FeatureEngineer):
 
                 # Plot Histogram (Distribution)
                 data = df[col].iloc[-1000:]  # Last 1000 points
-                ax.hist(
-                    data, bins=50, alpha=0.7, color="blue", density=True, label="Dist"
-                )
+                ax.hist(data, bins=50, alpha=0.7, color="blue", density=True, label="Dist")
 
                 # Overlay Line Plot on Twin Axis (Time Series)
                 ax2 = ax.twinx()
-                ax2.plot(
-                    data.values, color="red", alpha=0.3, linewidth=1, label="Series"
-                )
+                ax2.plot(data.values, color="red", alpha=0.3, linewidth=1, label="Series")
 
                 ax.set_title(col)
                 ax.grid(True, alpha=0.3)
@@ -166,23 +148,3 @@ class FeatureInspector(FeatureEngineer):
             plt.savefig(filename)
             print(f"Saved {filename}")
             plt.close()
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Inspect and Plot Features for AI Bot")
-    parser.add_argument(
-        "csv_path",
-        nargs="?",
-        default="ai_bot/data_engine/BTC_USDT_USDT_15m.csv",
-        help="Path to input CSV",
-    )
-
-    args = parser.parse_args()
-
-    target_csv = args.csv_path
-    if not os.path.exists(target_csv):
-        print(f"Error: File {target_csv} not found.")
-        sys.exit(1)
-
-    inspector = FeatureInspector()
-    inspector.inspect_and_plot(target_csv)

@@ -1,9 +1,5 @@
-import sys
 import os
 from typing import Tuple, List, Dict
-
-# Add parent dir to path to find other modules
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import pandas as pd
 from stable_baselines3 import PPO
@@ -36,18 +32,14 @@ def load_training_data() -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
     for name, path in context_files.items():
         if os.path.exists(path):
             print(f"Loading Context {name}...")
-            additional_dfs[name] = pd.read_csv(
-                path, index_col="timestamp", parse_dates=True
-            )
+            additional_dfs[name] = pd.read_csv(path, index_col="timestamp", parse_dates=True)
         else:
             print(f"Warning: {name} context missing.")
 
     return df, additional_dfs
 
 
-def prepare_features(
-    df: pd.DataFrame, context_dfs: Dict[str, pd.DataFrame]
-) -> Tuple[pd.DataFrame, List[str]]:
+def prepare_features(df: pd.DataFrame, context_dfs: Dict[str, pd.DataFrame]) -> Tuple[pd.DataFrame, List[str]]:
     """
     Engines features using FeatureEngineer.
     Returns:
@@ -71,14 +63,10 @@ def prepare_features(
     return df_processed, available_features
 
 
-def create_training_env(
-    df: pd.DataFrame, features: List[str], window_size: int = 60
-) -> VecEnv:
+def create_training_env(df: pd.DataFrame, features: List[str], window_size: int = 60) -> VecEnv:
     """Creates the Vectorized Gym Environment."""
     print(f"Creating Environment (Window={window_size})...")
-    return DummyVecEnv(
-        [lambda: CryptoTradingEnv(df, features=features, window_size=window_size)]
-    )
+    return DummyVecEnv([lambda: CryptoTradingEnv(df, features=features, window_size=window_size)])
 
 
 def initialize_ppo_agent(env: VecEnv) -> PPO:

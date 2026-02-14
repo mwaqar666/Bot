@@ -4,15 +4,16 @@ channels:
   - defaults
 dependencies:
   - python=3.10
+  - pip
   - numpy
   - pandas
-  - pandas-ta
+  - pandera-pandas
   - python-dotenv
   - schedule
-  - scikit-learn
   - matplotlib
   - gymnasium
   - stable-baselines3
-  - shimmy
   - pytorch
   - ccxt-py
+  - pip:
+    - pandas-ta-classic

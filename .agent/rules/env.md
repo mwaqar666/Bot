@@ -2,20 +2,27 @@
 trigger: always_on
 ---
 
-# Python & Conda Execution Rules
+# Project Engineering Standards & Environment Rules
 
-## 1. Code Structure & DRY (Don't Repeat Yourself)
-- **Rule of Three**: If the same logic (e.g., fetching a candle or calculating RSI) appears three times, it MUST be abstracted into a shared function or class.
-- **Centralized Config**: Hardcoded values (API keys, Symbols, Timeframes) are strictly forbidden in logic files. They must live in `config.py` or a `.env` file.
-- **Single Representation**: Every piece of knowledge (like reward function logic) must exist in exactly one place to prevent "logic drift" between training and live trading.
+## 1. Logic & Modular Architecture
+- **Abstract Logic**: Any logic used in three or more locations must be abstracted into a shared class or module.
+- **Config Separation**: Move all API keys, tickers, and timeframes to `config.py` and `.env.example`.
+- **DRY Enforcement**: Logic must not be repeated in the code. If the necessity of creating a class exists, there should be no cyclic dependencies.
 
-## 2. No God Function Policy
-- **One Task, One Function**: Each function must do one thing and one thing well (e.g., `fetch_ohlcv` only fetches data; it does not also calculate indicators).
-- **Size Limits**: Keep methods under 50 lines. If a function is longer than the screen height, refactor it into smaller sub-functions.
-- **Separation of Concerns**: Keep **Execution** (API), **Strategy** (logic), and **AI** (inference) in separate modules. `main.py` should only act as a high-level orchestrator.
+## 2. Mandatory OOP Pattern
+- **Class-Based Architecture**: Use Object-Oriented Programming for all primary components. Strategies must inherit from a base `Strategy` class; Exchanges must follow a unified `Exchange` interface.
+- **State Management**: Use instance variables to track account state, open positions, and local balances.
+- **Method Scope**: Keep methods under 30 lines. Refactor larger blocks into private helper methods prefixed with `_` or `__`.
 
-## 3. Documentation & Type Safety
-- **Mandatory Type Hinting**: All function signatures must include type hints for parameters and return values.
-    - *Example*: `def get_balance(symbol: str) -> float:`
-- **Action-Oriented Docstrings**: Use triple single quotes `'''` for docstrings. Describe the **why** and the **returns**, not just a play-by-play of the code.
-- **Self-Documenting Names**: Use descriptive `lower_case_with_underscores`. A function named `check_rsi_overbought()` is required over generic names like `check_val()`.
+## 3. Type Safety & Documentation
+- **Type Hinting**: Every function and method signature must include type hints for all parameters and return values.
+- **Structured Data Transfers**: All data flow between classes must use Python `dataclasses`. Generic `list` or `dict` objects are strictly forbidden for inter-class communication to ensure attribute consistency and type safety.
+- **Docstring Standard**: Use triple single quotes `'''`. Every method must have a docstring containing:
+    - **Description**: A one-sentence summary of the method's purpose.
+    - **Args**: A list of parameters with their intent.
+    - **Returns**: A description of the output.
+- **Naming Conventions**: Use descriptive `snake_case`. Variable names must clearly indicate their content.
+
+## 4. Environment Management
+- **Declarative Updates**: All installations and removal of packages must be done by editing the `environment.yml` file.
+- **Conda Sync**: Update and prune the environment using `conda env update --file environment.yml --prune` following any change.

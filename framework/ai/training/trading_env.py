@@ -3,18 +3,15 @@ from gymnasium import spaces
 import numpy as np
 import pandas as pd
 from typing import Tuple, List, Dict
+from datetime import datetime
+
+from framework.data.data_types import Trade
 
 
 class CryptoTradingEnv(gym.Env):
     """
     A custom Trading Environment for OpenAI Gym / Gymnasium.
     Simulates a crypto exchange with support for Long/Short positions and intra-candle stop-losses.
-
-    Key Features:
-    - Action Space: Discrete(3) -> Hold, Long, Short given as 0, 1, 2.
-    - Observation Space: Continuous vector of technical indicators.
-    - Intra-Candle Simulation: Checks Low/High of the *current* candle against SL/TP levels.
-    - Fee Simulation: Deducts a percentage fee on every trade open/close.
     """
 
     def __init__(
@@ -48,7 +45,6 @@ class CryptoTradingEnv(gym.Env):
         self.window_size = window_size
 
         # Data pointers
-        # Start at window_size to allow lookback (0 to window_size-1)
         self.current_step = window_size
         self.max_steps = len(df) - 1
 
@@ -59,8 +55,6 @@ class CryptoTradingEnv(gym.Env):
         self.features = features
 
         # Define Observation Space (Normalized values)
-        # Shape: (Window_Size, Num_Features)
-        # This allows the Transformer to see a sequence of history.
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -80,19 +74,18 @@ class CryptoTradingEnv(gym.Env):
         self._reset_stops()
 
         # Performance Tracking
-        self.trade_history = []
+        self.trade_history: List[Trade] = []
 
     def reset(self, seed=None, options=None) -> Tuple[np.ndarray, dict]:
         """
         Resets the environment to the initial state.
-        Called at the start of every episode (training loop).
         """
         super().reset(seed=seed)
 
         # Agent State initialization
         self.balance = self.initial_balance
         self.net_worth = self.initial_balance
-        self.position = 0.0  # Positive = Long, Negative = Short
+        self.position = 0.0
         self.in_position = False
         self.entry_price = 0.0
         self.entry_step = 0
@@ -103,7 +96,7 @@ class CryptoTradingEnv(gym.Env):
         # Performance Tracking
         self.trade_history = []
 
-        # Reset Step Pointer to Window Size (so we can look back immediately)
+        # Reset Step Pointer to Window Size
         self.current_step = self.window_size
 
         return self._next_observation(), {}
@@ -111,13 +104,6 @@ class CryptoTradingEnv(gym.Env):
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, dict]:
         """
         Execute one time step within the environment.
-
-        Logic Flow:
-        1. Advance Time (Index).
-        2. Check if existing positions hit SL/TP during the candle (Intra-candle check).
-        3. Execute Agent's Action (Buy/Sell/Hold) if not stopped out.
-        4. Calculate Rewards based on Net Worth change.
-        5. Check for Episode Termination (End of Data or Bankruptcy).
         """
         self.current_step += 1
 
@@ -128,23 +114,17 @@ class CryptoTradingEnv(gym.Env):
         prev_net_worth = self.net_worth
 
         # 2. Intra-Candle Stop Logic
-        # Returns True if a stop was triggered, meaning the position is now closed.
         stop_triggered = self._check_intra_candle_stops(market_data)
 
         # 3. Execute Action
-        # Only allow new actions if we weren't just stopped out in this same candle.
-        # (Simplifies logic: if stopped out, you wait for next bar to re-enter)
-        action_executions = 0  # Count total executions (open + close) for fee penalty
+        action_executions = 0
         if not stop_triggered:
             action_executions = self._execute_agent_action(action, market_data)
 
         # 4. Update Valuation
-        # Recalculate Net Worth based on new price (Mark-to-Market)
         self.net_worth = self._calculate_net_worth(market_data["close"])
 
         # 5. Calculate Reward
-        # We assume 1 'execution' cost is akin to Paying the Fee.
-        # The Fee is implicitly in Net Worth, but we add an extra 'Decision Penalty' to discourage overtrading.
         reward = self._calculate_reward(prev_net_worth, action_executions)
 
         # 6. Check Termination
@@ -171,7 +151,7 @@ class CryptoTradingEnv(gym.Env):
 
             # Simple metrics
             if len(self.trade_history) > 0:
-                wins = [t for t in self.trade_history if t["pnl"] > 0]
+                wins = [t for t in self.trade_history if t.pnl > 0]
                 win_rate = len(wins) / len(self.trade_history) * 100
                 print(f"Trades: {len(self.trade_history)}")
                 print(f"Win Rate: {win_rate:.2f}%")
@@ -183,16 +163,10 @@ class CryptoTradingEnv(gym.Env):
     def _next_observation(self) -> np.ndarray:
         """
         Extracts the WINDOW of feature vectors ending at current step.
-        Returns shape: (window_size, num_features)
         """
-        # Slice from (step - window_size) up to (step)
         start_index = self.current_step - self.window_size
         end_index = self.current_step
-
-        # Note: We use values directly.
-        # Ensure df is sorted by time (it usually is).
         obs = self.df.iloc[start_index:end_index][self.features].values
-
         return obs.astype(np.float32)
 
     def _get_current_market_data(self) -> Dict[str, float]:
@@ -202,9 +176,6 @@ class CryptoTradingEnv(gym.Env):
     def _check_intra_candle_stops(self, data: Dict[str, float]) -> bool:
         """
         Checks if the Low or High of the current candle triggered a SL or TP.
-
-        Returns:
-            bool: True if a position was closed (stopped out), False otherwise.
         """
         if not self.in_position:
             return False
@@ -234,9 +205,6 @@ class CryptoTradingEnv(gym.Env):
     def _execute_agent_action(self, action: int, data: Dict[str, float]) -> int:
         """
         Processes the AI's chosen action (Hold, Buy, Sell) and executes trades.
-
-        Returns:
-            int: Number of actions (Open/Close) executed.
         """
         current_price = data["close"]
         current_atr = data["atr"]
@@ -259,54 +227,39 @@ class CryptoTradingEnv(gym.Env):
                 # Long -> Short (Flip)
                 self._close_long(current_price, reason="Signal")
                 self._open_short(current_price, current_atr)
-                executions = 2  # Close + Open = 2 Executions
+                executions = 2
 
             elif self.position < 0 and action == 1:
                 # Short -> Long (Flip)
                 self._close_short(current_price, reason="Signal")
                 self._open_long(current_price, current_atr)
-                executions = 2  # Close + Open = 2 Executions
+                executions = 2
 
         return executions
 
     def _calculate_reward(self, prev_net_worth: float, executions_count: int) -> float:
         """
         Calculates the Reward based on % Return and Trade Penalties.
-
-        Reward = (Current_Net_Worth - Prev_Net_Worth) / Prev_Net_Worth * 100
-        Penalty = -0.05 * Number_of_Executions (Transaction Cost Penalty)
         """
-        epsilon = 1e-6  # Avoid division by zero
+        epsilon = 1e-6
 
         if abs(prev_net_worth) < epsilon:
             profit_pct = 0.0
         else:
             profit_pct = (self.net_worth - prev_net_worth) / prev_net_worth
 
-        # Reward is simply the Percentage Change in Net Worth
-        # Fees are already deducted from Net Worth, so we don't need double penalty.
-        # We multiply by 100 to make the numbers meaningful for the neural net (e.g. 0.01 -> 1.0)
-        reward = profit_pct * 100.0
-
-        return reward
+        return profit_pct * 100.0
 
     def _check_termination_conditions(self) -> Tuple[bool, bool]:
         """
         Checks if the episode should end.
-
-        Returns:
-            (terminated, truncated)
-            terminated: True if "Game Over" (Bankruptcy).
-            truncated: True if "Time Limit Reached" (End of Data).
         """
         terminated = False
         truncated = False
 
-        # End of Dataset
         if self.current_step >= self.max_steps:
             truncated = True
 
-        # Bankruptcy (50% Loss)
         if self.net_worth < self.initial_balance * 0.5:
             terminated = True
 
@@ -317,57 +270,53 @@ class CryptoTradingEnv(gym.Env):
         if not self.in_position:
             return self.net_worth
 
-        # Mark-to-Market Valuation
         if self.position > 0:  # Long
             return self.position * current_price
         else:  # Short
-            # Short Value = Initial_Short_Value + (Entry - Current) * Size
-            # Derived as: Position_Size * (2*Entry - Current)
             return abs(self.position) * (2 * self.entry_price - current_price)
 
     def _log_trade(self, pnl: float, exit_price: float, reason: str):
         """Records a closed trade to history"""
-        self.trade_history.append(
-            {
-                "step": self.current_step,
-                "entry_price": self.entry_price,
-                "exit_price": exit_price,
-                "pnl": pnl,
-                "reason": reason,
-                "duration": self.current_step - self.entry_step,
-            }
+        # We need actual datetimes for the Trade object, but for RL simulations
+        # we often just have steps. We'll use placeholders or fetch from DF if possible.
+        # Here we just use current timestamp as placeholder for sim.
+        now = datetime.now()
+
+        side = "long" if self.position > 0 else "short"  # Note: position is closing here
+        # Wait, self.position is cleared *after* this call in the close methods?
+        # No, it's cleared after _log_trade call in the original code?
+        # Let's check: _close_long calls _log_trade BEFORE clearing self.position. Correct.
+
+        trade = Trade(
+            symbol="SIMULATION",
+            entry_price=self.entry_price,
+            exit_price=exit_price,
+            amount=abs(self.position),
+            side=side,  # type: ignore
+            pnl=pnl,
+            entry_time=now,  # Placeholder, real RL would map step->time
+            exit_time=now,
+            reason=reason,
         )
+        self.trade_history.append(trade)
 
     # =========================================
     #        Trade Execution Primitives
     # =========================================
 
     def _open_long(self, price: float, atr: float):
-        """
-        Opens a Long position.
-        1. Calculates Equity (minus fee).
-        2. Sets Position Size.
-        3. Sets SL/TP based on ATR.
-        """
         equity = self.net_worth * (1 - self.fee_percent)
         self.position = equity / price
         self.entry_price = price
         self.entry_step = self.current_step
         self.in_position = True
 
-        # Set Dynamic Stops
         self.stop_loss_price = price - (atr * self.sl_mul)
         self.take_profit_price = price + (atr * self.tp_mul)
 
     def _close_long(self, price: float, reason: str = "Signal"):
-        """
-        Closes a Long position.
-        1. Calculates Revenue (minus fee).
-        2. Updates Net Worth.
-        3. Resets State.
-        """
         revenue = self.position * price * (1 - self.fee_percent)
-        pnl = revenue - (self.position * self.entry_price)  # Approximate PnL for stats
+        pnl = revenue - (self.position * self.entry_price)
 
         self.net_worth = revenue
         self._log_trade(pnl, price, reason)
@@ -378,34 +327,20 @@ class CryptoTradingEnv(gym.Env):
         self._reset_stops()
 
     def _open_short(self, price: float, atr: float):
-        """
-        Opens a Short position.
-        1. Calculates Equity (minus fee).
-        2. Sets Negative Position Size.
-        3. Sets SL/TP based on ATR (Inverse direction).
-        """
         equity = self.net_worth * (1 - self.fee_percent)
         self.position = -(equity / price)
         self.entry_price = price
         self.entry_step = self.current_step
         self.in_position = True
 
-        # Set Dynamic Stops (Short: SL is Above, TP is Below)
         self.stop_loss_price = price + (atr * self.sl_mul)
         self.take_profit_price = price - (atr * self.tp_mul)
 
     def _close_short(self, price: float, reason: str = "Signal"):
-        """
-        Closes a Short position.
-        1. Calculates Value based on Short PnL equation.
-        2. Updates Net Worth.
-        3. Resets State.
-        """
-        # Short PnL formula: Invested + (Entry - Current) * #Coins
         raw_value = abs(self.position) * (2 * self.entry_price - price)
         self.net_worth = raw_value * (1 - self.fee_percent)
 
-        pnl = self.net_worth - (abs(self.position) * self.entry_price)  # Approx PnL
+        pnl = self.net_worth - (abs(self.position) * self.entry_price)
         self._log_trade(pnl, price, reason)
 
         self.position = 0.0
@@ -414,6 +349,5 @@ class CryptoTradingEnv(gym.Env):
         self._reset_stops()
 
     def _reset_stops(self):
-        """Resets stop prices to zero."""
         self.stop_loss_price = 0.0
         self.take_profit_price = 0.0

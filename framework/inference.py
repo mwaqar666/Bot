@@ -1,8 +1,7 @@
 import os
 import pandas as pd
-from typing import Dict
 from stable_baselines3 import PPO
-from .data_engine.feature_engineer import FeatureEngineer
+from framework.analysis.technical_indicators import TechnicalIndicators
 
 
 class AI_Analyst:
@@ -14,7 +13,7 @@ class AI_Analyst:
     def __init__(self, model_path="ai_bot/models/ppo_trading_bot"):
         self.model_path = model_path
         self.model = None
-        self.engineer = FeatureEngineer()
+        self.engineer = TechnicalIndicators()
 
     def load_model(self):
         try:
@@ -43,7 +42,7 @@ class AI_Analyst:
         try:
             # Feature Engineering (Level 2 Max)
             # We must pass the context dataframes here!
-            df_processed = self.engineer.process_data(df)
+            df_processed = self.engineer.add_indicators(df)
 
             # Get the latest state
             latest_state = df_processed.iloc[-1].values

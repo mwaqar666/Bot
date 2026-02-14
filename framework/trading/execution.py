@@ -1,11 +1,13 @@
-import ccxt
+from typing import Optional
 
+from framework.data.data_types import Position, Order
+
+import ccxt
 import pandas as pd
-from typing import Dict, Optional
 
 
 class TradeExecutor:
-    def __init__(self, api_key: str, api_secret: str, testnet: bool = True):
+    def __init__(self, api_key: str, api_secret: str, testnet: bool = True) -> None:
         """
         Initializes the connection to the Binance Futures exchange.
         """
@@ -23,9 +25,7 @@ class TradeExecutor:
         self.exchange.enable_demo_trading(testnet)  # Use Testnet for paper trading
         print(f"Connected to Binance Futures ({'TESTNET' if testnet else 'LIVE'})")
 
-    def fetch_ohlcv(
-        self, symbol: str, timeframe: str, limit: int = 100
-    ) -> pd.DataFrame:
+    def fetch_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> pd.DataFrame:
         """
         Fetches historical candlestick data (Open, High, Low, Close, Volume).
         """
@@ -34,9 +34,7 @@ class TradeExecutor:
             bars = self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
 
             # Convert to DataFrame
-            df = pd.DataFrame(
-                bars, columns=["timestamp", "open", "high", "low", "close", "volume"]
-            )
+            df = pd.DataFrame(bars, columns=["timestamp", "open", "high", "low", "close", "volume"])
             df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
 
             return df
@@ -55,7 +53,7 @@ class TradeExecutor:
             print(f"Error fetching balance: {e}")
             return 0.0
 
-    def set_leverage(self, symbol: str, leverage: int):
+    def set_leverage(self, symbol: str, leverage: int) -> None:
         """
         Sets the leverage for the given symbol (e.g., BTC/USDT).
         """
@@ -67,31 +65,19 @@ class TradeExecutor:
         except Exception as e:
             print(f"Error setting leverage: {e}")
 
-    def place_order(
-        self,
-        symbol: str,
-        side: str,
-        amount: float,
-        price: Optional[float] = None,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-    ) -> Dict:
+    def place_order(self, symbol: str, side: str, amount: float, price: Optional[float] = None, stop_loss: Optional[float] = None, take_profit: Optional[float] = None) -> Optional[Order]:
         """
         Places an order with optional Stop Loss and Take Profit.
         Orchestrates 3 separate orders for Binance Futures.
         """
         try:
-            # 1. Place Entry Order
-            params = {}
             if price:
                 order_type = "limit"
             else:
                 order_type = "market"
 
             print(f"Placing ENTRY {side.upper()} {amount} {symbol}...")
-            entry_order = self.exchange.create_order(
-                symbol, order_type, side, amount, price, params
-            )
+            entry_order = self.exchange.create_order(symbol, order_type, side, amount, price)
             print(f"Entry Order Placed: {entry_order['id']}")
 
             # 2. Place Stop Loss (if provided)
@@ -100,9 +86,7 @@ class TradeExecutor:
                 sl_params = {"stopPrice": stop_loss, "reduceOnly": True}
 
                 print(f"Placing STOP LOSS at {stop_loss}...")
-                self.exchange.create_order(
-                    symbol, "STOP_MARKET", sl_side, amount, None, sl_params
-                )
+                self.exchange.create_order(symbol, "STOP_MARKET", sl_side, amount, None, sl_params)
 
             # 3. Place Take Profit (if provided)
             if take_profit:
@@ -111,21 +95,26 @@ class TradeExecutor:
                     "stopPrice": take_profit,
                     "reduceOnly": True,
                 }  # Binance uses stopPrice for TP too often
-                # Note: Some exchanges use 'TAKE_PROFIT_MARKET', others just 'stop' with trigger type.
-                # CCXT usually maps 'TAKE_PROFIT_MARKET'.
 
                 print(f"Placing TAKE PROFIT at {take_profit}...")
-                self.exchange.create_order(
-                    symbol, "TAKE_PROFIT_MARKET", tp_side, amount, None, tp_params
-                )
+                self.exchange.create_order(symbol, "TAKE_PROFIT_MARKET", tp_side, amount, None, tp_params)
 
-            return entry_order
+            # Return standard Order object
+            return Order(
+                id=str(entry_order["id"]),
+                symbol=symbol,
+                side=side,  # type: ignore
+                amount=float(entry_order.get("amount", amount)),
+                price=(float(entry_order.get("price", price)) if entry_order.get("price") else price),
+                status=entry_order.get("status", "unknown"),
+                type=order_type,
+            )
 
         except Exception as e:
             print(f"Error placing order chain: {e}")
-            return {}
+            return None
 
-    def cancel_orders(self, symbol: str):
+    def cancel_orders(self, symbol: str) -> None:
         """Cancels all open orders for a symbol (SL/TP)"""
         try:
             self.exchange.cancel_all_orders(symbol)
@@ -133,10 +122,10 @@ class TradeExecutor:
         except Exception as e:
             print(f"Error cancelling orders: {e}")
 
-    def get_position(self, symbol: str) -> Dict:
+    def get_position(self, symbol: str) -> Optional[Position]:
         """
         Check if we have an open position for the symbol.
-        Returns the position details or None.
+        Returns the Position object or None.
         """
         try:
             positions = self.exchange.fetch_positions(symbols=[symbol])
@@ -144,10 +133,9 @@ class TradeExecutor:
             for position in positions:
                 # CCXT usually returns a list. We filter for the specific symbol.
                 # Check if size is non-zero (meaning open)
-                # Binance Futures specific: 'contracts' is absolute size, 'side' might be 'both' in hedge mode
-                # We should look at 'positionAmt' if available, or rely on 'side' if 'long'/'short'
-
+                # Binance Futures specific: contracts is absolute size
                 size = float(position.get("contracts", 0))
+
                 if position["symbol"] == symbol and size > 0:
                     side = position["side"]
 
@@ -160,12 +148,13 @@ class TradeExecutor:
                         elif amt > 0:
                             side = "long"
 
-                    return {
-                        "side": side,  # 'long' or 'short'
-                        "amount": size,
-                        "entry_price": float(position["entryPrice"]),
-                        "unrealized_pnl": float(position["unrealizedPnl"]),
-                    }
+                    return Position(
+                        symbol=symbol,
+                        side=side,  # type: ignore
+                        amount=size,
+                        entry_price=float(position["entryPrice"]),
+                        unrealized_pnl=float(position["unrealizedPnl"]),
+                    )
             return None
         except Exception as e:
             # Often on testnet or empty account, fetching positions might fail or return empty
