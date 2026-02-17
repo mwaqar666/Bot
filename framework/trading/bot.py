@@ -1,6 +1,5 @@
 import pandas as pd
 from datetime import datetime
-from typing import Optional
 
 import config
 
@@ -52,37 +51,36 @@ class TradingBot:
         """
         print(f"\n--- Bot Cycle Started at {datetime.now().strftime('%H:%M:%S')} ---")
 
-        df = self.__fetch_market_data()
-        if df is None or df.empty:
-            print("Error: Could not fetch data. Skipping cycle.")
+        try:
+            df = self.__fetch_market_data()
+
+            algo_signal = self.strategy.analyze(df)
+            print(f"ALGO: {algo_signal.direction.upper()}")
+
+            position = self.executor.get_position(self.symbol)
+
+            self.__handle_open_position(position, algo_signal) if position is not None else self.__check_for_entry(algo_signal)
+        except ValueError as e:
+            print(f"Error: Could not fetch data. Skipping cycle. {e}")
             return
 
-        algo_signal = self.strategy.analyze(df)
-        print(f"ALGO: {algo_signal.direction.upper()}")
-
-        position = self.executor.get_position(self.symbol)
-        if position:
-            self.__handle_open_position(position, algo_signal)
-        else:
-            self.__check_for_entry(algo_signal)
-
-    def __fetch_market_data(self) -> Optional[pd.DataFrame]:
+    def __fetch_market_data(self) -> pd.DataFrame:
         """
-        Fetches market data using DataLoader.
+        Fetches market data using DataLoader and adds technical indicators.
 
         Args:
             None
 
         Returns:
-            Optional[pd.DataFrame]: DataFrame with OHLCV data or None if failed.
+            pd.DataFrame: DataFrame with OHLCV data and technical indicators or ValueError if failed.
         """
         df = self.data_loader.fetch_historical_data(self.symbol, self.timeframe, days=config.DATA_LOOKBACK_DAYS)
-        if df is not None and not df.empty:
-            # Process features
-            df = self.technical_indicators.add_indicators(df)
-        return df
+        if df is None:
+            raise ValueError("Failed to fetch market data.")
 
-    def __handle_open_position(self, position: Position, algo_signal: TradeSignal, ai_decision: str) -> None:
+        return self.technical_indicators.add_indicators(df)
+
+    def __handle_open_position(self, position: Position, algo_signal: TradeSignal) -> None:
         """
         Manages exits and flips for open positions.
 

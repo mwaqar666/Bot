@@ -3,7 +3,6 @@ from typing import Optional
 from framework.data.data_types import Position, Order
 
 import ccxt
-import pandas as pd
 
 
 class TradeExecutor:
@@ -24,23 +23,6 @@ class TradeExecutor:
         )
         self.exchange.enable_demo_trading(testnet)  # Use Testnet for paper trading
         print(f"Connected to Binance Futures ({'TESTNET' if testnet else 'LIVE'})")
-
-    def fetch_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> pd.DataFrame:
-        """
-        Fetches historical candlestick data (Open, High, Low, Close, Volume).
-        """
-        try:
-            # Fetch bars
-            bars = self.exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
-
-            # Convert to DataFrame
-            df = pd.DataFrame(bars, columns=["timestamp", "open", "high", "low", "close", "volume"])
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-
-            return df
-        except Exception as e:
-            print(f"Error fetching data for {symbol}: {e}")
-            return pd.DataFrame()
 
     def get_balance(self, asset: str = "USDT") -> float:
         """

@@ -4,6 +4,9 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# --- Project Configuration ---
+MODE = "data"  # Default mode to run the bot in: 'trade' for live bot, 'data' for downloading/analyzing data.
+
 # --- Exchange Configuration ---
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_API_SECRET")
@@ -61,9 +64,6 @@ SUPER_TREND_MULTIPLIER = 3.0
 # --- Log Return Parameters ---
 LOG_RETURN_LENGTH = 20
 
-# --- Percent Return Parameters ---
-PERCENT_RETURN_LENGTH = 20
-
 # --- Entropy Parameters ---
 ENTROPY_LENGTH = 10
 ENTROPY_BASE = 2
@@ -74,10 +74,6 @@ MAD_LENGTH = 30
 # --- Standard Deviation Parameters ---
 STD_DEV_LENGTH = 30
 STD_DEV_DDOF = 1
-
-# --- Variance Parameters ---
-VARIANCE_LENGTH = 30
-VARIANCE_DDOF = 0
 
 # --- Z-Score Parameters ---
 ZSCORE_LENGTH = 30
@@ -110,15 +106,6 @@ ATR = 14
 # --- Bollinger Bands Parameters ---
 BBANDS = 20
 BBANDS_STD = 2.0
-
-# --- Donchian Channel Parameters ---
-DONCHIAN_LOWER_LENGTH = 20
-DONCHIAN_UPPER_LENGTH = 20
-
-# --- Keltner Channel Parameters ---
-KC_LENGTH = 20
-KC_SCALAR = 2
-KC_MA_MODE = "ema"
 
 # --- Ulcer Index Parameters ---
 UI_LENGTH = 14

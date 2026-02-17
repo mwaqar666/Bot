@@ -18,9 +18,9 @@ class DataLoader:
         """
         Initializes the DataLoader with the exchange instance.
         """
-        self.exchange = ccxt.binance({"enableRateLimit": True})
+        self.__exchange = ccxt.binance({"enableRateLimit": True})
 
-    def fetch_historical_data(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, days: int = 365, save_to_disk: bool = False) -> Optional[pd.DataFrame]:
+    def fetch_historical_data(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, days: int = config.DATA_LOOKBACK_DAYS, save_to_disk: bool = False) -> Optional[pd.DataFrame]:
         """
         Downloads historical OHLCV data from Binance.
 
@@ -34,17 +34,17 @@ class DataLoader:
             Optional[pd.DataFrame]: A DataFrame containing the historical data,
                                     or None if no data was found.
         """
-        start_time, end_time = self._calculate_time_range(days)
-        all_candles = self._fetch_candles(symbol, timeframe, start_time, end_time)
+        start_time, end_time = self.__calculate_time_range(days)
+        all_candles = self.__fetch_candles(symbol, timeframe, start_time, end_time)
 
         if not all_candles:
             print("  No data found.")
             return None
 
-        df = self._convert_to_dataframe(all_candles)
+        df = self.__convert_to_dataframe(all_candles)
 
         if save_to_disk:
-            self._save_to_csv(df, symbol, timeframe)
+            self.save_to_csv(df, symbol, timeframe)
 
         return df
 
@@ -59,7 +59,7 @@ class DataLoader:
         Returns:
             Optional[pd.DataFrame]: The loaded DataFrame or None if not found.
         """
-        filename = self._get_file_path(symbol, timeframe)
+        filename = self.__get_file_path(symbol, timeframe)
         if not os.path.exists(filename):
             print(f"  [WARN] File not found: {filename}")
             return None
@@ -74,7 +74,25 @@ class DataLoader:
 
         return df
 
-    def _calculate_time_range(self, days: int) -> Tuple[datetime, datetime]:
+    def save_to_csv(self, df: pd.DataFrame, symbol: str, timeframe: str) -> str:
+        """
+        Saves the DataFrame to a CSV file.
+
+        Args:
+            df (pd.DataFrame): The data to save.
+            symbol (str): The trading pair symbol.
+            timeframe (str): The timeframe string.
+        """
+        filename = self.__get_file_path(symbol, timeframe)
+
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        df.to_csv(filename)
+
+        print(f"  Success! Saved {len(df)} rows to {filename}")
+
+        return filename
+
+    def __calculate_time_range(self, days: int) -> Tuple[datetime, datetime]:
         """
         Calculates start and end times based on days.
 
@@ -88,7 +106,7 @@ class DataLoader:
         start_time = end_time - timedelta(days=days)
         return start_time, end_time
 
-    def _fetch_candles(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime) -> List[list]:
+    def __fetch_candles(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime) -> List[list]:
         """
         Fetches candles from the exchange in a loop.
 
@@ -109,7 +127,7 @@ class DataLoader:
 
         while since < end_timestamp:
             try:
-                candles = self.exchange.fetch_ohlcv(symbol, timeframe, since, limit=1000)
+                candles = self.__exchange.fetch_ohlcv(symbol, timeframe, since, limit=1000)
                 if not candles:
                     break
 
@@ -128,7 +146,7 @@ class DataLoader:
 
         return all_candles
 
-    def _convert_to_dataframe(self, candles: List[list]) -> pd.DataFrame:
+    def __convert_to_dataframe(self, candles: List[list]) -> pd.DataFrame:
         """
         Converts raw candles to a DataFrame.
 
@@ -144,23 +162,7 @@ class DataLoader:
 
         return df
 
-    def _save_to_csv(self, df: pd.DataFrame, symbol: str, timeframe: str) -> None:
-        """
-        Saves the DataFrame to a CSV file.
-
-        Args:
-            df (pd.DataFrame): The data to save.
-            symbol (str): The trading pair symbol.
-            timeframe (str): The timeframe string.
-        """
-        filename = self._get_file_path(symbol, timeframe)
-
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        df.to_csv(filename)
-
-        print(f"  Success! Saved {len(df)} rows to {filename}")
-
-    def _get_file_path(self, symbol: str, timeframe: str) -> str:
+    def __get_file_path(self, symbol: str, timeframe: str) -> str:
         """
         Constructs the standard file path for data.
 
@@ -172,4 +174,4 @@ class DataLoader:
             str: Relative path to the CSV file.
         """
         safe_symbol = symbol.replace("/", "_").replace(":", "_")
-        return f"ai_bot/data_engine/data/{safe_symbol}_{timeframe}.csv"
+        return f"framework/data/{safe_symbol}_{timeframe}.csv"
