@@ -8,8 +8,8 @@ To get started, you'll need **Conda** or **Miniconda** installed on your system.
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository_url>
-    cd <repository_name>
+    git clone https://github.com/mwaqar666/Bot.git
+    cd Bot
     ```
 
 2.  **Create the Conda environment:**
@@ -20,7 +20,7 @@ To get started, you'll need **Conda** or **Miniconda** installed on your system.
 
 3.  **Activate the environment:**
     ```bash
-    conda activate crypto_bot
+    conda activate trading_bot
     ```
 
 4.  **Install Jupyter Kernel (Optional):**

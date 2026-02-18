@@ -1,4 +1,4 @@
-name: crypto_bot
+name: trading_bot
 channels:
   - conda-forge
   - defaults

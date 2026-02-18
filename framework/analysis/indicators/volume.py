@@ -173,7 +173,7 @@ class VolumeProfile(Indicator):
         #     df["vp_neg"] = vp["neg_volume"]
         #     df["vp_total"] = vp["total_volume"]
 
-        return df
+        return pd.DataFrame({}, index=df.index)
 
     def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
         return SignalDirection.NONE

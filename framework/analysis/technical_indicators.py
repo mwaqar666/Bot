@@ -12,47 +12,36 @@ from framework.analysis.indicators.volume import ChaikinMoneyFlow, ElderForceInd
 
 
 class TechnicalIndicators:
-    def __init__(self) -> None:
-        """
-        Initializes the Technical Indicators registry.
-            - Momentum
-            - Overlap
-            - Performance
-            - Statistics
-            - Trend
-            - Volatility
-            - Volume
-        """
-        self.__indicators: list[Indicator] = [
-            AwesomeOscillator(),
-            MovingAverageConvergenceDivergence(),
-            RelativeStrengthIndex(),
-            StochasticRSI(),
-            TTMSqueeze(),
-            ArnaudLegouxMovingAverage(),
-            ExponentialMovingAverage(),
-            HullMovingAverage(),
-            SuperTrend(),
-            VolumeWeightedAveragePrice(),
-            DrawDown(),
-            LogReturn(),
-            Entropy(),
-            MeanAbsoluteDeviation(),
-            StandardDeviation(),
-            ZScore(),
-            AverageDirectionalIndex(),
-            AroonOscillator(),
-            ChoppinessIndex(),
-            ParabolicStopAndReverse(),
-            Vortex(),
-            AverageTrueRange(),
-            BollingerBands(),
-            UlcerIndex(),
-            ChaikinMoneyFlow(),
-            ElderForceIndex(),
-            MoneyFlowIndex(),
-            OnBalanceVolume(),
-        ]
+    __indicators: list[Indicator] = [
+        AwesomeOscillator(),
+        MovingAverageConvergenceDivergence(),
+        RelativeStrengthIndex(),
+        StochasticRSI(),
+        TTMSqueeze(),
+        ArnaudLegouxMovingAverage(),
+        ExponentialMovingAverage(),
+        HullMovingAverage(),
+        SuperTrend(),
+        VolumeWeightedAveragePrice(),
+        DrawDown(),
+        LogReturn(),
+        Entropy(),
+        MeanAbsoluteDeviation(),
+        StandardDeviation(),
+        ZScore(),
+        AverageDirectionalIndex(),
+        AroonOscillator(),
+        ChoppinessIndex(),
+        ParabolicStopAndReverse(),
+        Vortex(),
+        AverageTrueRange(),
+        BollingerBands(),
+        UlcerIndex(),
+        ChaikinMoneyFlow(),
+        ElderForceIndex(),
+        MoneyFlowIndex(),
+        OnBalanceVolume(),
+    ]
 
     def add_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -87,7 +76,8 @@ class TechnicalIndicators:
             results = [f.result() for f in futures]
 
         ohlcv = df[["open", "high", "low", "close", "volume"]]
-        df = pd.concat([ohlcv] + results, axis=1).clip(lower=-3, upper=3)
+        results = pd.concat(results, axis=1).clip(lower=-3, upper=3)
+        df = pd.concat([ohlcv, results], axis=1)
         df.dropna(inplace=True)
 
         return df
