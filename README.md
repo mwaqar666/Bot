@@ -1,38 +1,86 @@
-# Crypto Futures Trading Bot
+# Crypto Trading Bot
 
-This bot trades **BTC/USDT** on Binance Futures using a **Trend Following + Momentum** strategy.
-
-## Strategy Summary
-*   **Timeframe**: 15 Minutes
-*   **Indicators**:
-    *   **EMA 9 & 21**: Determine Trend Direction (Bullish/Bearish).
-    *   **RSI 14**: Momentum Filter (Avoid buying overbought > 70).
-    *   **ADX 14**: Volatility Filter (Only trade if Trend Strength > 25).
-    *   **ATR 14**: Dynamic Stop Loss calculation.
-
-## Configuration
-All settings are in `config.py`.
-*   **Symbol**: BTC/USDT
-*   **Leverage**: 10x
-*   **Risk Per Trade**: 1% of account balance.
+An open-source cryptocurrency trading bot framework designed for modularity and extensibility. This project aims to provide a robust pipeline for data acquisition, technical analysis, model training, and live trading execution.
 
 ## Installation
-1.  **Install Conda** (if not already installed).
-2.  **Create Environment**:
+
+To get started, you'll need **Conda** or **Miniconda** installed on your system.
+
+1.  **Clone the repository:**
     ```bash
-    conda create -n crypto_bot python=3.10 -y
-    conda activate crypto_bot
-    conda install -c conda-forge ccxt pandas pandas-ta python-dotenv schedule
+    git clone <repository_url>
+    cd <repository_name>
     ```
-3.  **Setup Keys**:
-    *   Rename `.env.example` to `.env`.
-    *   Add your Binance API Key & Secret (Use Testnet keys for safety!).
+
+2.  **Create the Conda environment:**
+    This project uses an `environment.yml` file to manage dependencies.
+    ```bash
+    conda env create -f environment.yml
+    ```
+
+3.  **Activate the environment:**
+    ```bash
+    conda activate crypto_bot
+    ```
+
+4.  **Install Jupyter Kernel (Optional):**
+    If you plan to use Jupyter Notebooks for experimentation or development, register the kernel so it appears in your notebook interface.
+    ```bash
+    python -m ipykernel install --user --name=trading-bot --display-name="Trading Bot"
+    ```
+
+## Project Status
+
+We are building this bot in stages. Here is the current progress:
+
+-   ✅ **Data Loading**: Used <code>ccxt</code> to download candle data for various symbols over different timeframes.
+-   ✅ **Technical Analysis and Normalization**: Added calculation of various technical indicators, and their normalization.
+-   ✅ **Trade Execution Logic**: Added the main bot loop and the interface for the bot to interact with the exchange.
+-   🚧 **Model Training**: *IN PROGRESS*: We are developing machine learning models for signal generation.
+-   🚧 **Model Optimization**: *TODO*: Tune the various hyperparameters to select the best model for bactesting.
+-   🚧 **Backtesting**: *TODO*: Backtest the model on past data.
+-   ⏳ **Live Trading**: *TODO*: Make the bot easy to access and UI for bot statistics and analysis.
 
 ## Usage
-Run the bot:
+
+The project is controlled via `main.py` using command-line arguments.
+
+### 1. Data Mode (Data Downloading & Analysis)
+Use this mode to download historical data, calculate indicators, and generate correlation heatmaps.
+
+**Basic command:**
 ```bash
-python main.py
+python main.py data
 ```
 
-## Disclaimer
-Trading futures involves significant risk. This bot is for educational purposes only. Use at your own risk.
+**Options:**
+-   `--symbol`: Override the default trading pair (e.g., `BTC/USDT`, `ETH/USDT`).
+-   `--timeframe`: Override the time interval (e.g., `1h`, `15m`, `1d`).
+-   `--days`: Specify the number of lookback days for data fetching.
+
+**Example:**
+Download 60 days of ETH/USDT data on a 1-hour timeframe:
+```bash
+python main.py data --symbol ETH/USDT --timeframe 1h --days 60
+```
+
+### 2. Trade Mode (Live Trading)
+Use this mode to start the live trading loop. *Note: This feature is under active development.*
+
+**Basic command:**
+```bash
+python main.py trade
+```
+
+**Options:**
+-   `--symbol`: Override the default symbol to trade.
+-   `--timeframe`: Override the default timeframe.
+
+**Example:**
+Start the bot for BTC/USDT on a 5-minute timeframe:
+```bash
+python main.py trade --symbol BTC/USDT --timeframe 5m
+```
+
+## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
