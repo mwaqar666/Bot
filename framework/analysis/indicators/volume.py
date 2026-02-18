@@ -5,23 +5,28 @@ from framework.data.data_types import SignalDirection
 
 import pandas as pd
 import pandas_ta_classic as ta
+from sklearn.preprocessing import MinMaxScaler, RobustScaler
 
 
 # -----------------
-# 1. Chaikin Money Flow (CMF)
+# 1. Chaikin Money Flow
 # -----------------
-class CMF(Indicator):
+class ChaikinMoneyFlow(Indicator):
     """
     Chaikin Money Flow.
     """
 
+    __robust_scaler = RobustScaler()
+
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         cmf = ta.cmf(df["high"], df["low"], df["close"], df["volume"], length=config.CMF_LENGTH)
-        if cmf is not None and not cmf.empty:
-            df["cmf"] = cmf
-        return df
 
-    def get_signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
+        if cmf is None or cmf.empty:
+            raise ValueError("Chaikin Money Flow calculation failed")
+
+        return pd.DataFrame({"cmf": cmf}, index=df.index)
+
+    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
         if "cmf" not in df.columns:
             return SignalDirection.NONE
 
@@ -35,22 +40,30 @@ class CMF(Indicator):
 
         return SignalDirection.NONE
 
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        cmf = self.__robust_scaler.fit_transform(df[["cmf"]])
+        return pd.DataFrame({"cmf": cmf.flatten()}, index=df.index)
+
 
 # -----------------
-# 2. Elder Force Index (EFI)
+# 2. Elder Force Index
 # -----------------
-class EFI(Indicator):
+class ElderForceIndex(Indicator):
     """
     Elder Force Index.
     """
 
+    __robust_scaler = RobustScaler()
+
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         efi = ta.efi(df["close"], df["volume"], length=config.EFI_LENGTH)
-        if efi is not None and not efi.empty:
-            df["efi"] = efi
-        return df
 
-    def get_signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
+        if efi is None or efi.empty:
+            raise ValueError("Elder Force Index calculation failed")
+
+        return pd.DataFrame({"efi": efi}, index=df.index)
+
+    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
         if "efi" not in df.columns:
             return SignalDirection.NONE
 
@@ -65,22 +78,30 @@ class EFI(Indicator):
 
         return SignalDirection.NONE
 
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        efi = self.__robust_scaler.fit_transform(df[["efi"]])
+        return pd.DataFrame({"efi": efi.flatten()}, index=df.index)
+
 
 # -----------------
-# 3. Money Flow Index (MFI)
+# 3. Money Flow Index
 # -----------------
-class MFI(Indicator):
+class MoneyFlowIndex(Indicator):
     """
     Money Flow Index.
     """
 
+    __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         mfi = ta.mfi(df["high"], df["low"], df["close"], df["volume"], length=config.MFI_LENGTH)
-        if mfi is not None and not mfi.empty:
-            df["mfi"] = mfi
-        return df
 
-    def get_signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
+        if mfi is None or mfi.empty:
+            raise ValueError("Money Flow Index calculation failed")
+
+        return pd.DataFrame({"mfi": mfi}, index=df.index)
+
+    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
         if "mfi" not in df.columns:
             return SignalDirection.NONE
 
@@ -94,24 +115,37 @@ class MFI(Indicator):
 
         return SignalDirection.NONE
 
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        mfi = self.__min_max_scaler.fit_transform(df[["mfi"]])
+        return pd.DataFrame({"mfi": mfi.flatten()}, index=df.index)
+
 
 # -----------------
 # 4. On-Balance Volume (OBV)
 # -----------------
-class OBV(Indicator):
+class OnBalanceVolume(Indicator):
     """
     On-Balance Volume.
     """
 
+    __robust_scaler = RobustScaler()
+
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         obv = ta.obv(df["close"], df["volume"])
-        if obv is not None and not obv.empty:
-            df["obv"] = obv
-        return df
 
-    def get_signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
+        if obv is None or obv.empty:
+            raise ValueError("On-Balance Volume calculation failed")
+
+        return pd.DataFrame({"obv": obv}, index=df.index)
+
+    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
         # OBV is primarily for divergence or trend confirmation.
         return SignalDirection.NONE
+
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        obv_diff = df["obv"].diff().fillna(0)
+        obv = self.__robust_scaler.fit_transform(obv_diff.values.reshape(-1, 1))
+        return pd.DataFrame({"obv": obv.flatten()}, index=df.index)
 
 
 # -----------------
@@ -141,5 +175,5 @@ class VolumeProfile(Indicator):
 
         return df
 
-    def get_signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
+    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
         return SignalDirection.NONE

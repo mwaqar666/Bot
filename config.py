@@ -14,10 +14,10 @@ IS_TESTNET = True  # Set to False for real money
 
 # --- Trading Parameters ---
 SYMBOL = "BTC/USDT"  # The pair we are trading
-TIMEFRAME = "5m"  # Candle timeframe
+TIMEFRAME = "1m"  # Candle timeframe
 MAX_LEVERAGE = 50  # Maximum allowable leverage (safety cap)
 RISK_PER_TRADE = 0.01  # Risk 1% of account balance per trade
-DATA_LOOKBACK_DAYS = 1  # Number of days of data to look back
+DATA_LOOKBACK_DAYS = 30  # Number of days of data to look back
 
 # --- Awesome Oscillator Parameters ---
 AO_FAST = 5

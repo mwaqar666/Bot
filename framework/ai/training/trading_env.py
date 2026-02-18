@@ -2,7 +2,6 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import pandas as pd
-from typing import Tuple, List, Dict
 from datetime import datetime
 
 from framework.data.data_types import Trade
@@ -17,7 +16,7 @@ class CryptoTradingEnv(gym.Env):
     def __init__(
         self,
         df: pd.DataFrame,
-        features: List[str] = [],
+        features: list[str] = [],
         initial_balance: float = 1000.0,
         fee_percent: float = 0.001,
         sl_atr_multiplier: float = 2.0,
@@ -74,9 +73,9 @@ class CryptoTradingEnv(gym.Env):
         self._reset_stops()
 
         # Performance Tracking
-        self.trade_history: List[Trade] = []
+        self.trade_history: list[Trade] = []
 
-    def reset(self, seed=None, options=None) -> Tuple[np.ndarray, dict]:
+    def reset(self, seed=None, options=None) -> tuple[np.ndarray, dict]:
         """
         Resets the environment to the initial state.
         """
@@ -101,7 +100,7 @@ class CryptoTradingEnv(gym.Env):
 
         return self._next_observation(), {}
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, dict]:
+    def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
         Execute one time step within the environment.
         """
@@ -169,11 +168,11 @@ class CryptoTradingEnv(gym.Env):
         obs = self.df.iloc[start_index:end_index][self.features].values
         return obs.astype(np.float32)
 
-    def _get_current_market_data(self) -> Dict[str, float]:
+    def _get_current_market_data(self) -> dict[str, float]:
         """Fetches necessary price/indicator data for the current step."""
         return self.df.iloc[self.current_step].to_dict()
 
-    def _check_intra_candle_stops(self, data: Dict[str, float]) -> bool:
+    def _check_intra_candle_stops(self, data: dict[str, float]) -> bool:
         """
         Checks if the Low or High of the current candle triggered a SL or TP.
         """
@@ -202,7 +201,7 @@ class CryptoTradingEnv(gym.Env):
 
         return triggered
 
-    def _execute_agent_action(self, action: int, data: Dict[str, float]) -> int:
+    def _execute_agent_action(self, action: int, data: dict[str, float]) -> int:
         """
         Processes the AI's chosen action (Hold, Buy, Sell) and executes trades.
         """
@@ -250,7 +249,7 @@ class CryptoTradingEnv(gym.Env):
 
         return profit_pct * 100.0
 
-    def _check_termination_conditions(self) -> Tuple[bool, bool]:
+    def _check_termination_conditions(self) -> tuple[bool, bool]:
         """
         Checks if the episode should end.
         """

@@ -1,5 +1,4 @@
 import os
-from typing import Tuple, List
 
 import config
 
@@ -58,7 +57,7 @@ class Backtester:
         filename = f"{safe_symbol}_{self.timeframe}.csv"
         return os.path.join(self.data_dir, filename)
 
-    def load_and_process_data(self, csv_path: str) -> Tuple[pd.DataFrame, List[str]]:
+    def load_and_process_data(self, csv_path: str) -> tuple[pd.DataFrame, list[str]]:
         """Loads CSV data and applies Feature Engineering."""
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"Data file not found at {csv_path}")
@@ -91,7 +90,7 @@ class Backtester:
 
         return df, valid_features
 
-    def setup_backtest_env(self, df: pd.DataFrame, features: List[str]) -> DummyVecEnv:
+    def setup_backtest_env(self, df: pd.DataFrame, features: list[str]) -> DummyVecEnv:
         """Initializes the Trading Environment."""
         return DummyVecEnv([lambda: CryptoTradingEnv(df, features=features, window_size=self.window_size)])
 

@@ -23,7 +23,7 @@ class Indicator(ABC):
         pass
 
     @abstractmethod
-    def get_signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
+    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
         """
         Analyzes the indicator at the specific index to return a BUY/SELL signal.
 
@@ -33,5 +33,20 @@ class Indicator(ABC):
 
         Returns:
             SignalDirection: BUY, SELL, or NONE.
+        """
+        pass
+
+    @abstractmethod
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalizes the indicator columns for AI/ML input.
+        Default implementation returns the DataFrame unchanged.
+        Override this in subclasses to apply scaling (e.g. Z-Score, MinMax).
+
+        Args:
+            df (pd.DataFrame): Dataframe with raw indicator values.
+
+        Returns:
+            pd.DataFrame: Dataframe with normalized columns (e.g. 'mfi_norm').
         """
         pass

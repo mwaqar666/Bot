@@ -7,13 +7,15 @@ dependencies:
   - pip
   - numpy
   - pandas
-  - pandera-pandas
   - python-dotenv
   - schedule
   - matplotlib
+  - seaborn
   - gymnasium
   - stable-baselines3
   - pytorch
+  - scikit-learn
   - ccxt-py
+  - ipykernel
   - pip:
     - pandas-ta-classic

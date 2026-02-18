@@ -1,3 +1,8 @@
+# IDE and Agent files
+.agent
+.vscode
+.idea
+
 # Environment File
 .env
 
@@ -11,4 +16,5 @@
 *.zip
 
 # Genrated Python Files
+__pycache__
 *.pyc

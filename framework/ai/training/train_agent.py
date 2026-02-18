@@ -1,5 +1,4 @@
 import os
-from typing import Tuple, List, Dict
 
 import pandas as pd
 from stable_baselines3 import PPO
@@ -9,7 +8,7 @@ from rl_env.trading_env import CryptoTradingEnv
 from ai_bot.models.transformer_policy import TransformerFeatureExtractor
 
 
-def load_training_data() -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
+def load_training_data() -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     """
     Loads base 15m data and additional context dataframes (30m, 1h, 4h).
     Returns:
@@ -39,7 +38,7 @@ def load_training_data() -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]:
     return df, additional_dfs
 
 
-def prepare_features(df: pd.DataFrame, context_dfs: Dict[str, pd.DataFrame]) -> Tuple[pd.DataFrame, List[str]]:
+def prepare_features(df: pd.DataFrame, context_dfs: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, list[str]]:
     """
     Engines features using FeatureEngineer.
     Returns:
@@ -63,7 +62,7 @@ def prepare_features(df: pd.DataFrame, context_dfs: Dict[str, pd.DataFrame]) -> 
     return df_processed, available_features
 
 
-def create_training_env(df: pd.DataFrame, features: List[str], window_size: int = 60) -> VecEnv:
+def create_training_env(df: pd.DataFrame, features: list[str], window_size: int = 60) -> VecEnv:
     """Creates the Vectorized Gym Environment."""
     print(f"Creating Environment (Window={window_size})...")
     return DummyVecEnv([lambda: CryptoTradingEnv(df, features=features, window_size=window_size)])

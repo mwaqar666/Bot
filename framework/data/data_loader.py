@@ -1,7 +1,7 @@
 import time
 import os
+from typing import Optional
 from datetime import datetime, timedelta
-from typing import Optional, List, Tuple
 
 import config
 
@@ -42,6 +42,9 @@ class DataLoader:
             return None
 
         df = self.__convert_to_dataframe(all_candles)
+
+        for col in df.columns:
+            df[col] = df[col] if col == "timestamp" else df[col].astype(float)
 
         if save_to_disk:
             self.save_to_csv(df, symbol, timeframe)
@@ -92,7 +95,7 @@ class DataLoader:
 
         return filename
 
-    def __calculate_time_range(self, days: int) -> Tuple[datetime, datetime]:
+    def __calculate_time_range(self, days: int) -> tuple[datetime, datetime]:
         """
         Calculates start and end times based on days.
 
@@ -106,7 +109,7 @@ class DataLoader:
         start_time = end_time - timedelta(days=days)
         return start_time, end_time
 
-    def __fetch_candles(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime) -> List[list]:
+    def __fetch_candles(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime) -> list[list]:
         """
         Fetches candles from the exchange in a loop.
 
@@ -146,7 +149,7 @@ class DataLoader:
 
         return all_candles
 
-    def __convert_to_dataframe(self, candles: List[list]) -> pd.DataFrame:
+    def __convert_to_dataframe(self, candles: list[list]) -> pd.DataFrame:
         """
         Converts raw candles to a DataFrame.
 
