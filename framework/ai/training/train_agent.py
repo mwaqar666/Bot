@@ -1,6 +1,6 @@
+from framework.analysis.technical_indicators import TechnicalIndicators
 import os
 import pandas as pd
-import numpy as np
 from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -10,10 +10,7 @@ from framework.ai.training.trading_env import CryptoTradingEnv
 from framework.ai.models.transformer_feature_extractor import TransformerFeatureExtractor
 
 # --- Configuration ---
-BASE_DIR = r"c:\Users\mwaqa\Desktop\Bot"
-DATA_PATH = os.path.join(BASE_DIR, "framework", "data", "BTC_USDT_5m.csv")
-MODEL_SAVE_PATH = os.path.join(BASE_DIR, "framework", "ai", "models", "ppo_transformer_v1")
-LOG_DIR = os.path.join(BASE_DIR, "framework", "ai", "logs")
+DATA_PATH = "framework/data/BTC_USDT_5m_raw.csv"
 
 WINDOW_SIZE = 60  # Look back 60 candles (5 hours)
 TOTAL_TIMESTEPS = 1_000_000
@@ -38,65 +35,29 @@ class TensorboardCallback(BaseCallback):
         return True
 
 
-def load_data(path: str) -> tuple[pd.DataFrame, list[str]]:
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Data file not found: {path}")
-
-    print(f"Loading data from {path}...")
-    df = pd.read_csv(path)
-
-    # Validation
-    missing = [f for f in RAW_FEATURES if f not in df.columns]
-    if missing:
-        raise ValueError(f"Missing columns: {missing}")
-
-    # Create Normalized Features for the Agent
-    # We leave original columns untouched for the Environment logic (PnL, Stop Loss)
-    agent_features = []
-
-    for col in RAW_FEATURES:
-        norm_col_name = f"{col}_norm"
-        # Robust Scaling (Median/IQR) or Z-Score (Mean/Std)
-        # Using Z-Score for simplicity and neural net compatibility
-        mean = df[col].mean()
-        std = df[col].std()
-
-        # Avoid division by zero
-        if std == 0:
-            std = 1
-
-        df[norm_col_name] = (df[col] - mean) / std
-        agent_features.append(norm_col_name)
-
-    print("Data Normalized. Agent will see columns ending in '_norm'.")
-    return df, agent_features
-
-
 def make_env(df, features, rank, seed=0):
-    """
-    Utility function for multiprocessed env.
-    """
-
-    def _init():
+    def callback() -> CryptoTradingEnv:
         env = CryptoTradingEnv(
             df=df,
-            features=features,  # Agent sees normalized features
+            features=features,
             window_size=WINDOW_SIZE,
             initial_balance=1000.0,
         )
         env.reset(seed=seed + rank)
         return env
 
-    return _init
+    return callback
 
 
 def train():
     print("--- Starting AI Training Session ---")
 
     # 1. Load Data
-    df, agent_features = load_data(DATA_PATH)
-    print(f"Total Data Rows: {len(df)}")
-    print(f"Agent Features: {agent_features}")
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(f"Data file not found: {DATA_PATH}")
+
+    print(f"Loading data from {DATA_PATH}...")
+    df = pd.read_csv(DATA_PATH)
 
     # 2. Split Data using sklearn (70% Train, 15% Val, 15% Test)
     # Important: shuffle=False to preserve time-series order
@@ -108,17 +69,21 @@ def train():
     # Second split: Split the 30% Temp into 50% Val (15% total) and 50% Test (15% total)
     val_df, test_df = train_test_split(temp_df, test_size=0.5, shuffle=False)
 
-    print(f"Train Set: {len(train_df)} rows")
-    print(f"Val Set:   {len(val_df)} rows")
-    print(f"Test Set:  {len(test_df)} rows")
-
     # Reset indices to ensure environment works correctly
     train_df = train_df.reset_index(drop=True)
     val_df = val_df.reset_index(drop=True)
     test_df = test_df.reset_index(drop=True)
 
+    ti = TechnicalIndicators()
+
+    ti.fit_scalers(train_df)
+
+    train_df = ti.normalize(train_df)
+    val_df = ti.normalize(val_df)
+    test_df = ti.normalize(test_df)
+
     # 3. Create Environment (Training on Train Set)
-    env = DummyVecEnv([make_env(train_df, agent_features, i) for i in range(1)])
+    env = DummyVecEnv([make_env(train_df, train_df.columns, i) for i in range(1)])
 
     # 4. Initialize PPO
     print("Initializing PPO Agent...")

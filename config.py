@@ -17,7 +17,7 @@ SYMBOL = "BTC/USDT"  # The pair we are trading
 TIMEFRAME = "5m"  # Candle timeframe
 MAX_LEVERAGE = 50  # Maximum allowable leverage (safety cap)
 RISK_PER_TRADE = 0.01  # Risk 1% of account balance per trade
-DATA_LOOKBACK_DAYS = 365  # Number of days of data to look back
+DATA_LOOKBACK_DAYS = 5  # Number of days of data to look back
 
 # --- Even Better Sine Wave Parameters ---
 EBSW_LENGTH = 40

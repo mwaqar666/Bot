@@ -1,6 +1,6 @@
-# Crypto Trading Bot
+# Trading Bot
 
-An open-source cryptocurrency trading bot framework designed for modularity and extensibility. This project aims to provide a robust pipeline for data acquisition, technical analysis, model training, and live trading execution.
+An open-source trading bot, being developed for modularity, extensibility, and ease of use. This project aims to provide a robust pipeline for data downloading, technical analysis, feature engineering, model training, backtesting, and live trading with paper trading mode.
 
 ## Installation
 
@@ -33,13 +33,15 @@ To get started, you'll need **Conda** or **Miniconda** installed on your system.
 
 We are building this bot in stages. Here is the current progress:
 
--   ✅ **Data Loading**: Used <code>ccxt</code> to download candle data for various symbols over different timeframes.
--   ✅ **Technical Analysis and Normalization**: Added calculation of various technical indicators, and their normalization.
+-   ✅ **Data Fetching**: Used <code>ccxt</code> to download candle data for various symbols over different timeframes.
+-   ✅ **Technical Analysis**: Added calculation of various technical indicators.
+-   ✅ **Feature Engineering**: Selected appropriate indicator features and normalized them.
 -   ✅ **Trade Execution Logic**: Added the main bot loop and the interface for the bot to interact with the exchange.
 -   🚧 **Model Training**: *IN PROGRESS*: We are developing machine learning models for signal generation.
 -   🚧 **Model Optimization**: *TODO*: Tune the various hyperparameters to select the best model for bactesting.
 -   🚧 **Backtesting**: *TODO*: Backtest the model on past data.
--   ⏳ **Live Trading**: *TODO*: Make the bot easy to access and UI for bot statistics and analysis.
+-   ⏳ **Paper Trading**: *TODO*: Make the bot and UI for paper trading statistics and analysis.
+-   ⏳ **Live Trading**: *TODO*: Make the bot easy to access and portfolio tracking.
 
 ## Usage
 

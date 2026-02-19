@@ -55,15 +55,10 @@ class TradingBot:
         try:
             df = self.__fetch_market_data()
 
-            ai_action, ai_confidence = self.ai_analyst.analyze(df)
-            print(f"AI: {ai_action.upper()} ({ai_confidence:.2f})")
-
             # Create TradeSignal from AI Action
-            signal_direction = SignalDirection.NONE
-            if ai_action == "buy":
-                signal_direction = SignalDirection.BUY
-            elif ai_action == "sell":
-                signal_direction = SignalDirection.SELL
+            signal_direction = self.ai_analyst.analyze(df)
+
+            print(f"AI: {signal_direction.upper()}")
 
             # Calculate SL/TP based on ATR
             current_price = df["close"].iloc[-1]
@@ -173,7 +168,7 @@ class TradingBot:
         self.executor.cancel_orders(self.symbol)
 
         close_side = "sell" if position.side == "long" else "buy"
-        self.executor.place_order(self.symbol, close_side, position.amount)
+        # self.executor.place_order(self.symbol, close_side, position.amount)
 
         self.__attempt_flip_entry(close_side, position, signal)
 

@@ -73,7 +73,7 @@ class TechnicalIndicators:
         for indicator in self.__indicators:
             indicator.fit_scaler(df)
 
-    def normalize_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Normalizes all indicators in the DataFrame.
         Args:

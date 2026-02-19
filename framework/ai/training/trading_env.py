@@ -274,7 +274,7 @@ class CryptoTradingEnv(gym.Env):
         else:  # Short
             return abs(self.position) * (2 * self.entry_price - current_price)
 
-    def _log_trade(self, pnl: float, exit_price: float, reason: str):
+    def _log_trade(self, pnl: float, exit_price: float, reason: str) -> None:
         """Records a closed trade to history"""
         # We need actual datetimes for the Trade object, but for RL simulations
         # we often just have steps. We'll use placeholders or fetch from DF if possible.
@@ -303,7 +303,7 @@ class CryptoTradingEnv(gym.Env):
     #        Trade Execution Primitives
     # =========================================
 
-    def _open_long(self, price: float, atr: float):
+    def _open_long(self, price: float, atr: float) -> None:
         equity = self.net_worth * (1 - self.fee_percent)
         self.position = equity / price
         self.entry_price = price
@@ -313,7 +313,7 @@ class CryptoTradingEnv(gym.Env):
         self.stop_loss_price = price - (atr * self.sl_mul)
         self.take_profit_price = price + (atr * self.tp_mul)
 
-    def _close_long(self, price: float, reason: str = "Signal"):
+    def _close_long(self, price: float, reason: str = "Signal") -> None:
         revenue = self.position * price * (1 - self.fee_percent)
         pnl = revenue - (self.position * self.entry_price)
 
@@ -325,7 +325,7 @@ class CryptoTradingEnv(gym.Env):
         self.in_position = False
         self._reset_stops()
 
-    def _open_short(self, price: float, atr: float):
+    def _open_short(self, price: float, atr: float) -> None:
         equity = self.net_worth * (1 - self.fee_percent)
         self.position = -(equity / price)
         self.entry_price = price
@@ -335,7 +335,7 @@ class CryptoTradingEnv(gym.Env):
         self.stop_loss_price = price + (atr * self.sl_mul)
         self.take_profit_price = price - (atr * self.tp_mul)
 
-    def _close_short(self, price: float, reason: str = "Signal"):
+    def _close_short(self, price: float, reason: str = "Signal") -> None:
         raw_value = abs(self.position) * (2 * self.entry_price - price)
         self.net_worth = raw_value * (1 - self.fee_percent)
 
@@ -347,6 +347,6 @@ class CryptoTradingEnv(gym.Env):
         self.in_position = False
         self._reset_stops()
 
-    def _reset_stops(self):
+    def _reset_stops(self) -> None:
         self.stop_loss_price = 0.0
         self.take_profit_price = 0.0
