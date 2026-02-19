@@ -11,7 +11,8 @@ from sklearn.preprocessing import RobustScaler
 # 1. Draw Down
 # -----------------
 class DrawDown(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         draw_down = ta.drawdown(df["close"])
@@ -25,8 +26,11 @@ class DrawDown(Indicator):
 
         return pd.DataFrame({"dd": dd, "dd_pct": dd_pct, "dd_log": dd_log}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["dd_pct"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        dd_pct = self.__robust_scaler.fit_transform(df[["dd_pct"]])
+        dd_pct = self.__robust_scaler.transform(df[["dd_pct"]])
         return pd.DataFrame({"dd_pct": dd_pct.flatten()}, index=df.index)
 
 
@@ -34,7 +38,8 @@ class DrawDown(Indicator):
 # 2. Log Return
 # -----------------
 class LogReturn(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         log_return = ta.log_return(df["close"], length=config.LOG_RETURN_LENGTH)
@@ -44,6 +49,9 @@ class LogReturn(Indicator):
 
         return pd.DataFrame({"log_return": log_return}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["log_return"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        log_return = self.__robust_scaler.fit_transform(df[["log_return"]])
+        log_return = self.__robust_scaler.transform(df[["log_return"]])
         return pd.DataFrame({"log_return": log_return.flatten()}, index=df.index)

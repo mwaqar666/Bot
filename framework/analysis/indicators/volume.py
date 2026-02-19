@@ -11,7 +11,8 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 # 1. Chaikin Money Flow
 # -----------------
 class ChaikinMoneyFlow(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         cmf = ta.cmf(df["high"], df["low"], df["close"], df["volume"], length=config.CMF_LENGTH)
@@ -21,8 +22,11 @@ class ChaikinMoneyFlow(Indicator):
 
         return pd.DataFrame({"cmf": cmf}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["cmf"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cmf = self.__robust_scaler.fit_transform(df[["cmf"]])
+        cmf = self.__robust_scaler.transform(df[["cmf"]])
         return pd.DataFrame({"cmf": cmf.flatten()}, index=df.index)
 
 
@@ -30,7 +34,8 @@ class ChaikinMoneyFlow(Indicator):
 # 2. Elder Force Index
 # -----------------
 class ElderForceIndex(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         efi = ta.efi(df["close"], df["volume"], length=config.EFI_LENGTH)
@@ -40,8 +45,11 @@ class ElderForceIndex(Indicator):
 
         return pd.DataFrame({"efi": efi}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["efi"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        efi = self.__robust_scaler.fit_transform(df[["efi"]])
+        efi = self.__robust_scaler.transform(df[["efi"]])
         return pd.DataFrame({"efi": efi.flatten()}, index=df.index)
 
 
@@ -49,7 +57,8 @@ class ElderForceIndex(Indicator):
 # 3. Money Flow Index
 # -----------------
 class MoneyFlowIndex(Indicator):
-    __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+    def __init__(self) -> None:
+        self.__min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         mfi = ta.mfi(df["high"], df["low"], df["close"], df["volume"], length=config.MFI_LENGTH)
@@ -59,8 +68,11 @@ class MoneyFlowIndex(Indicator):
 
         return pd.DataFrame({"mfi": mfi}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__min_max_scaler.fit(df[["mfi"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        mfi = self.__min_max_scaler.fit_transform(df[["mfi"]])
+        mfi = self.__min_max_scaler.transform(df[["mfi"]])
         return pd.DataFrame({"mfi": mfi.flatten()}, index=df.index)
 
 
@@ -68,7 +80,8 @@ class MoneyFlowIndex(Indicator):
 # 4. On-Balance Volume (OBV)
 # -----------------
 class OnBalanceVolume(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         obv = ta.obv(df["close"], df["volume"])
@@ -78,9 +91,13 @@ class OnBalanceVolume(Indicator):
 
         return pd.DataFrame({"obv": obv}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        obv_diff = df["obv"].diff().fillna(0)
+        self.__robust_scaler.fit(obv_diff.values.reshape(-1, 1))
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         obv_diff = df["obv"].diff().fillna(0)
-        obv = self.__robust_scaler.fit_transform(obv_diff.values.reshape(-1, 1))
+        obv = self.__robust_scaler.transform(obv_diff.values.reshape(-1, 1))
         return pd.DataFrame({"obv": obv.flatten()}, index=df.index)
 
 
@@ -104,6 +121,9 @@ class VolumeProfile(Indicator):
         #     df["vp_total"] = vp["total_volume"]
 
         return pd.DataFrame({}, index=df.index)
+
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        pass
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame({}, index=df.index)

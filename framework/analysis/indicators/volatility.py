@@ -4,14 +4,15 @@ import config
 
 import pandas as pd
 import pandas_ta_classic as ta
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
+from sklearn.preprocessing import RobustScaler
 
 
 # -----------------
 # 1. Average True Range
 # -----------------
 class AverageTrueRange(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         atr = ta.atr(df["high"], df["low"], df["close"], length=config.ATR)
@@ -21,10 +22,13 @@ class AverageTrueRange(Indicator):
 
         return pd.DataFrame({"atr": atr}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        norm_atr = df["atr"] / df["close"]
+        self.__robust_scaler.fit(norm_atr.values.reshape(-1, 1))
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         norm_atr = df["atr"] / df["close"]
-        atr = self.__robust_scaler.fit_transform(norm_atr.values.reshape(-1, 1))
-
+        atr = self.__robust_scaler.transform(norm_atr.values.reshape(-1, 1))
         return pd.DataFrame({"atr": atr.flatten()}, index=df.index)
 
 
@@ -32,7 +36,8 @@ class AverageTrueRange(Indicator):
 # 2. Normalized Average True Range
 # -----------------
 class NormalizedAverageTrueRange(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         natr = ta.natr(df["high"], df["low"], df["close"], length=config.ATR)
@@ -42,9 +47,11 @@ class NormalizedAverageTrueRange(Indicator):
 
         return pd.DataFrame({"natr": natr}, index=df.index)
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        natr = self.__robust_scaler.fit_transform(df[["natr"]])
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["natr"]])
 
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        natr = self.__robust_scaler.transform(df[["natr"]])
         return pd.DataFrame({"natr": natr.flatten()}, index=df.index)
 
 
@@ -52,8 +59,8 @@ class NormalizedAverageTrueRange(Indicator):
 # 3. Bollinger Bands
 # -----------------
 class BollingerBands(Indicator):
-    __robust_scaler = RobustScaler()
-    __min_max_scaler = MinMaxScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         bb = ta.bbands(df["close"], length=config.BBANDS, std=config.BBANDS_STD)
@@ -69,18 +76,20 @@ class BollingerBands(Indicator):
 
         return pd.DataFrame({"bb_lower": bb_lower, "bb_mid": bb_mid, "bb_upper": bb_upper, "bb_width": bb_width, "bb_pct": bb_pct}, index=df.index)
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        bb_width = self.__robust_scaler.fit_transform(df[["bb_width"]])
-        bb_pct = self.__min_max_scaler.fit_transform(df[["bb_pct"]])
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["bb_width"]])
 
-        return pd.DataFrame({"bb_width": bb_width.flatten(), "bb_pct": bb_pct.flatten()}, index=df.index)
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        bb_width = self.__robust_scaler.transform(df[["bb_width"]])
+        return pd.DataFrame({"bb_width": bb_width.flatten()}, index=df.index)
 
 
 # -----------------
 # 4. Ulcer Index
 # -----------------
 class UlcerIndex(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         ui = ta.ui(df["close"], length=config.UI_LENGTH, scalar=config.UI_SCALAR)
@@ -90,6 +99,9 @@ class UlcerIndex(Indicator):
 
         return pd.DataFrame({"ui": ui}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["ui"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        ui = self.__robust_scaler.fit_transform(df[["ui"]])
+        ui = self.__robust_scaler.transform(df[["ui"]])
         return pd.DataFrame({"ui": ui.flatten()}, index=df.index)

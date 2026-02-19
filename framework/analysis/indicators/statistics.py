@@ -11,7 +11,8 @@ from sklearn.preprocessing import MinMaxScaler
 # 1. Entropy
 # -----------------
 class Entropy(Indicator):
-    __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+    def __init__(self) -> None:
+        self.__min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         entropy = ta.entropy(df["close"], length=config.ENTROPY_LENGTH, base=config.ENTROPY_BASE)
@@ -21,6 +22,9 @@ class Entropy(Indicator):
 
         return pd.DataFrame({"entropy": entropy}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__min_max_scaler.fit(df[["entropy"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        entropy = self.__min_max_scaler.fit_transform(df[["entropy"]])
+        entropy = self.__min_max_scaler.transform(df[["entropy"]])
         return pd.DataFrame({"entropy": entropy.flatten()}, index=df.index)

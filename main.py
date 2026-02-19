@@ -79,7 +79,7 @@ def download_and_analyze(args) -> None:
 
     print("4. Applying Normalization... (IN PROGRESS)")
 
-    df = ti.normalize_indicators(df)
+    df = ti.fit_scalers(df)
 
     print(f"Normalized Features: {list(df.columns)}. (COMPLETED)")
 

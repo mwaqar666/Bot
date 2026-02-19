@@ -14,7 +14,8 @@ from sklearn.preprocessing import RobustScaler
 # 1. Intra Day Candle
 # -----------------
 class IntraDayCandle(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         rel_body = (df["close"] - df["open"]) / df["open"]
@@ -23,8 +24,12 @@ class IntraDayCandle(Indicator):
 
         return pd.DataFrame({"rel_body": rel_body, "upper_wick": upper_wick, "lower_wick": lower_wick}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        cols = ["rel_body", "upper_wick", "lower_wick"]
+        self.__robust_scaler.fit(df[cols])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = ["rel_body", "upper_wick", "lower_wick"]
-        candles = self.__robust_scaler.fit_transform(df[cols])
+        candles = self.__robust_scaler.transform(df[cols])
 
         return pd.DataFrame(candles, columns=cols, index=df.index)

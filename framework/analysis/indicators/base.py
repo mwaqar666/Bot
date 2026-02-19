@@ -22,16 +22,27 @@ class Indicator(ABC):
         pass
 
     @abstractmethod
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+    def fit_scaler(self, df: pd.DataFrame) -> None:
         """
-        Normalizes the indicator columns for AI/ML input.
-        Default implementation returns the DataFrame unchanged.
-        Override this in subclasses to apply scaling (e.g. Z-Score, MinMax).
+        Fits the scalers to the indicator data.
 
         Args:
             df (pd.DataFrame): Dataframe with raw indicator values.
 
         Returns:
-            pd.DataFrame: Dataframe with normalized columns (e.g. 'mfi_norm').
+            None
+        """
+        pass
+
+    @abstractmethod
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalizes the raw indicator data using the fitted scalers for AI/ML input.
+
+        Args:
+            df (pd.DataFrame): Dataframe with raw indicator values.
+
+        Returns:
+            pd.DataFrame: Dataframe with columns normalized.
         """
         pass

@@ -12,7 +12,8 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 # 1. Average Directional Index
 # -----------------
 class AverageDirectionalIndex(Indicator):
-    __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         adx_data = ta.adx(df["high"], df["low"], df["close"], length=config.ADX_LENGTH)
@@ -20,23 +21,28 @@ class AverageDirectionalIndex(Indicator):
         if adx_data is None or adx_data.empty:
             raise ValueError("ADX calculation failed")
 
-        adx = adx_data[f"ADX_{config.ADX_LENGTH}"]
         dmp = adx_data[f"DMP_{config.ADX_LENGTH}"]
         dmn = adx_data[f"DMN_{config.ADX_LENGTH}"]
 
-        return pd.DataFrame({"adx": adx, "dmp": dmp, "dmn": dmn}, index=df.index)
+        adx = adx_data[f"ADX_{config.ADX_LENGTH}"]
+        adx_osc = dmp - dmn
+
+        return pd.DataFrame({"adx": adx, "adx_osc": adx_osc}, index=df.index)
+
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["adx"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cols = ["adx", "dmp", "dmn"]
-        adx = self.__min_max_scaler.fit_transform(df[cols])
-        return pd.DataFrame(adx, columns=cols, index=df.index)
+        adx = self.__robust_scaler.transform(df[["adx"]])
+        return pd.DataFrame({"adx": adx.flatten()}, index=df.index)
 
 
 # -----------------
 # 2. Aroon Oscillator
 # -----------------
 class AroonOscillator(Indicator):
-    __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+    def __init__(self) -> None:
+        self.__min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         aroon_data = ta.aroon(df["high"], df["low"], length=config.AROON_LENGTH, scalar=config.AROON_SCALAR)
@@ -50,9 +56,11 @@ class AroonOscillator(Indicator):
 
         return pd.DataFrame({"aroon_up": aroon_up, "aroon_down": aroon_down, "aroon": aroon}, index=df.index)
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        aroon = self.__min_max_scaler.fit_transform(df[["aroon"]])
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__min_max_scaler.fit(df[["aroon"]])
 
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        aroon = self.__min_max_scaler.transform(df[["aroon"]])
         return pd.DataFrame({"aroon": aroon.flatten()}, index=df.index)
 
 
@@ -60,7 +68,8 @@ class AroonOscillator(Indicator):
 # 3. Choppiness Index
 # -----------------
 class ChoppinessIndex(Indicator):
-    __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+    def __init__(self) -> None:
+        self.__min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         chop = ta.chop(df["high"], df["low"], df["close"], length=config.CHOP_LENGTH, atr_length=config.CHOP_ATR_LENGTH, ln=config.CHOP_LN, scalar=config.CHOP_SCALAR)
@@ -70,8 +79,11 @@ class ChoppinessIndex(Indicator):
 
         return pd.DataFrame({"chop": chop}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__min_max_scaler.fit(df[["chop"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        chop = self.__min_max_scaler.fit_transform(df[["chop"]])
+        chop = self.__min_max_scaler.transform(df[["chop"]])
         return pd.DataFrame({"chop": chop.flatten()}, index=df.index)
 
 
@@ -79,8 +91,8 @@ class ChoppinessIndex(Indicator):
 # 4. Parabolic Stop and Reverse
 # -----------------
 class ParabolicStopAndReverse(Indicator):
-    __robust_scaler = RobustScaler()
-    __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         psar = ta.psar(df["high"], df["low"], df["close"], af0=config.PSAR_INIT_ACC, af=config.PSAR_ACC, max_af=config.PSAR_MAX_ACC)
@@ -90,28 +102,28 @@ class ParabolicStopAndReverse(Indicator):
 
         psar_l = psar[f"PSARl_{config.PSAR_INIT_ACC}_{config.PSAR_MAX_ACC}"]
         psar_s = psar[f"PSARs_{config.PSAR_INIT_ACC}_{config.PSAR_MAX_ACC}"]
-        psar_af = psar[f"PSARaf_{config.PSAR_INIT_ACC}_{config.PSAR_MAX_ACC}"]
-        psar_r = psar[f"PSARr_{config.PSAR_INIT_ACC}_{config.PSAR_MAX_ACC}"]
 
         psar = psar_l.fillna(psar_s)
         psar_direction = np.where(psar_l.notna(), 1, -1)
 
-        return pd.DataFrame({"psar": psar, "psar_direction": psar_direction, "psar_af": psar_af, "psar_r": psar_r}, index=df.index)
+        return pd.DataFrame({"psar": psar, "psar_direction": psar_direction}, index=df.index)
+
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        percentage_distance = (df["close"] - df["psar"]) / df["close"]
+        self.__robust_scaler.fit(percentage_distance.values.reshape(-1, 1))
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         percentage_distance = (df["close"] - df["psar"]) / df["close"]
-        psar = self.__robust_scaler.fit_transform(percentage_distance.values.reshape(-1, 1))
-
-        psar_af = self.__min_max_scaler.fit_transform(df[["psar_af"]])
-
-        return pd.DataFrame({"psar": psar.flatten(), "psar_direction": df["psar_direction"], "psar_af": psar_af.flatten()}, index=df.index)
+        psar = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1))
+        return pd.DataFrame({"psar": psar.flatten(), "psar_direction": df["psar_direction"]}, index=df.index)
 
 
 # -----------------
 # 5. Vortex Indicator
 # -----------------
 class Vortex(Indicator):
-    __scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         vortex_data = ta.vortex(df["high"], df["low"], df["close"], length=config.VORTEX_LENGTH)
@@ -125,7 +137,9 @@ class Vortex(Indicator):
 
         return pd.DataFrame({"vortex_p": vortex_p, "vortex_m": vortex_m, "vortex": vortex}, index=df.index)
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        vortex = self.__scaler.fit_transform(df[["vortex"]])
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__scaler.fit(df[["vortex"]])
 
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        vortex = self.__scaler.transform(df[["vortex"]])
         return pd.DataFrame({"vortex": vortex.flatten()}, index=df.index)

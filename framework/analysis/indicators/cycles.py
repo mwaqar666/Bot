@@ -18,5 +18,8 @@ class EvenBetterSineWave(Indicator):
 
         return pd.DataFrame({"ebsw": ebsw}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        pass
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame({"ebsw": df["ebsw"]}, index=df.index)

@@ -1,8 +1,9 @@
 import os
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, SubprocVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
 
 from framework.ai.training.trading_env import CryptoTradingEnv
@@ -94,16 +95,29 @@ def train():
 
     # 1. Load Data
     df, agent_features = load_data(DATA_PATH)
-    print(f"Data Rows: {len(df)}")
+    print(f"Total Data Rows: {len(df)}")
     print(f"Agent Features: {agent_features}")
 
-    # 2. Split Data
-    split_idx = int(len(df) * 0.8)
-    train_df = df.iloc[:split_idx].reset_index(drop=True)
-    val_df = df.iloc[split_idx:].reset_index(drop=True)
+    # 2. Split Data using sklearn (70% Train, 15% Val, 15% Test)
+    # Important: shuffle=False to preserve time-series order
+    print("Splitting data into Train (70%), Validation (15%), and Test (15%)...")
 
-    # 3. Create Environment
-    # We pass the full dataframe (with raw & norm columns) and the list of norm columns
+    # First split: 70% Train, 30% Temp (Val + Test)
+    train_df, temp_df = train_test_split(df, test_size=0.3, shuffle=False)
+
+    # Second split: Split the 30% Temp into 50% Val (15% total) and 50% Test (15% total)
+    val_df, test_df = train_test_split(temp_df, test_size=0.5, shuffle=False)
+
+    print(f"Train Set: {len(train_df)} rows")
+    print(f"Val Set:   {len(val_df)} rows")
+    print(f"Test Set:  {len(test_df)} rows")
+
+    # Reset indices to ensure environment works correctly
+    train_df = train_df.reset_index(drop=True)
+    val_df = val_df.reset_index(drop=True)
+    test_df = test_df.reset_index(drop=True)
+
+    # 3. Create Environment (Training on Train Set)
     env = DummyVecEnv([make_env(train_df, agent_features, i) for i in range(1)])
 
     # 4. Initialize PPO
@@ -112,7 +126,6 @@ def train():
     policy_kwargs = dict(
         features_extractor_class=TransformerFeatureExtractor,
         features_extractor_kwargs=dict(features_dim=128),
-        # You can also customize the net_arch here
     )
 
     model = PPO("MlpPolicy", env, verbose=1, policy_kwargs=policy_kwargs, learning_rate=3e-4, n_steps=2048, batch_size=64, gamma=0.99, gae_lambda=0.95, tensorboard_log=LOG_DIR, device="auto")
@@ -127,7 +140,7 @@ def train():
     # 6. Save
     print(f"Saving model to {MODEL_SAVE_PATH}...")
     model.save(MODEL_SAVE_PATH)
-    print("Done.")
+    print("Done. (Note: Validation and Test simulation should be run separately using the saved model)")
 
 
 if __name__ == "__main__":

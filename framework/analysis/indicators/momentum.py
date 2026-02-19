@@ -11,7 +11,8 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 # 1. Moving Average Convergence Divergence
 # -----------------
 class MovingAverageConvergenceDivergence(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         macd_data = ta.macd(df["close"], fast=config.MACD_FAST, slow=config.MACD_SLOW, signal=config.MACD_SIGNAL)
@@ -25,9 +26,13 @@ class MovingAverageConvergenceDivergence(Indicator):
 
         return pd.DataFrame({"macd": macd, "macd_signal": macd_signal, "macd_hist": macd_hist}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        cols = ["macd", "macd_hist"]
+        self.__robust_scaler.fit(df[cols])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = ["macd", "macd_hist"]
-        macd = self.__robust_scaler.fit_transform(df[cols])
+        macd = self.__robust_scaler.transform(df[cols])
 
         return pd.DataFrame(macd, columns=cols, index=df.index)
 
@@ -36,7 +41,8 @@ class MovingAverageConvergenceDivergence(Indicator):
 # 2. Relative Strength Index
 # -----------------
 class RelativeStrengthIndex(Indicator):
-    __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+    def __init__(self) -> None:
+        self.__min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         rsi = ta.rsi(df["close"], length=config.RSI_LENGTH)
@@ -46,8 +52,11 @@ class RelativeStrengthIndex(Indicator):
 
         return pd.DataFrame({"rsi": rsi}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__min_max_scaler.fit(df[["rsi"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        rsi = self.__min_max_scaler.fit_transform(df[["rsi"]])
+        rsi = self.__min_max_scaler.transform(df[["rsi"]])
         return pd.DataFrame({"rsi": rsi.flatten()}, index=df.index)
 
 
@@ -55,7 +64,8 @@ class RelativeStrengthIndex(Indicator):
 # 3. TTM Squeeze
 # -----------------
 class TTMSqueeze(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         squeeze = ta.squeeze(df["high"], df["low"], df["close"], bb_length=config.BBANDS, bb_std=config.BBANDS_STD, kc_length=config.SQUEEZE_KC_LENGTH, kc_scalar=config.SQUEEZE_KC_SCALAR, mom_length=config.SQUEEZE_MOM_LENGTH, mom_smooth=config.SQUEEZE_MOM_SMOOTH, mamode=config.SQUEEZE_MA_MODE)
@@ -70,9 +80,13 @@ class TTMSqueeze(Indicator):
 
         return pd.DataFrame({"sqz": sqz, "sqz_on": sqz_on, "sqz_off": sqz_off, "sqz_no": sqz_no}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        cols = ["sqz", "sqz_on"]
+        self.__robust_scaler.fit(df[cols])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cols = ["sqz", "sqz_on", "sqz_off"]
-        sqz = self.__robust_scaler.fit_transform(df[cols])
+        cols = ["sqz", "sqz_on"]
+        sqz = self.__robust_scaler.transform(df[cols])
 
         return pd.DataFrame(sqz, columns=cols, index=df.index)
 
@@ -81,7 +95,8 @@ class TTMSqueeze(Indicator):
 # 4. Percentag Volume Oscillator
 # -----------------
 class PercentageVolumeOscillator(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         pvo_data = ta.pvo(df["volume"], fast=config.PVO_FAST, slow=config.PVO_SLOW, signal=config.PVO_SIGNAL)
@@ -95,9 +110,13 @@ class PercentageVolumeOscillator(Indicator):
 
         return pd.DataFrame({"pvo": pvo, "pvo_hist": pvo_hist, "pvo_signal": pvo_signal}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        cols = ["pvo", "pvo_hist"]
+        self.__robust_scaler.fit(df[cols])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = ["pvo", "pvo_hist"]
-        pvo = self.__robust_scaler.fit_transform(df[cols])
+        pvo = self.__robust_scaler.transform(df[cols])
 
         return pd.DataFrame(pvo, columns=cols, index=df.index)
 
@@ -114,6 +133,9 @@ class BalanceOfPower(Indicator):
 
         return pd.DataFrame({"bop": bop}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        pass
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame({"bop": df["bop"]}, index=df.index)
 
@@ -122,7 +144,8 @@ class BalanceOfPower(Indicator):
 # 6. Williams %R
 # -----------------
 class WilliamsR(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         willr = ta.willr(df["high"], df["low"], df["close"], length=config.WILLR_LENGTH)
@@ -132,6 +155,9 @@ class WilliamsR(Indicator):
 
         return pd.DataFrame({"willr": willr}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        self.__robust_scaler.fit(df[["willr"]])
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        willr = self.__robust_scaler.fit_transform(df[["willr"]])
+        willr = self.__robust_scaler.transform(df[["willr"]])
         return pd.DataFrame({"willr": willr.flatten()}, index=df.index)

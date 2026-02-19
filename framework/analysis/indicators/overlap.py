@@ -11,7 +11,8 @@ from sklearn.preprocessing import RobustScaler
 # 1. Super Trend
 # -----------------
 class SuperTrend(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         super_trend = ta.supertrend(df["high"], df["low"], df["close"], length=config.SUPER_TREND_LENGTH, multiplier=config.SUPER_TREND_MULTIPLIER)
@@ -24,9 +25,13 @@ class SuperTrend(Indicator):
 
         return pd.DataFrame({"st": st, "st_direction": st_direction}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        percentage_distance = (df["close"] - df["st"]) / df["close"]
+        self.__robust_scaler.fit(percentage_distance.values.reshape(-1, 1))
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         percentage_distance = (df["close"] - df["st"]) / df["close"]
-        st = self.__robust_scaler.fit_transform(percentage_distance.values.reshape(-1, 1))
+        st = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1))
         return pd.DataFrame({"st": st.flatten(), "st_direction": df["st_direction"]}, index=df.index)
 
 
@@ -34,7 +39,8 @@ class SuperTrend(Indicator):
 # 2. Volume Weighted Average Price
 # -----------------
 class VolumeWeightedAveragePrice(Indicator):
-    __robust_scaler = RobustScaler()
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         vwap = ta.vwap(df["high"], df["low"], df["close"], df["volume"])
@@ -44,7 +50,11 @@ class VolumeWeightedAveragePrice(Indicator):
 
         return pd.DataFrame({"vwap": vwap}, index=df.index)
 
+    def fit_scaler(self, df: pd.DataFrame) -> None:
+        percentage_distance = (df["close"] - df["vwap"]) / df["close"]
+        self.__robust_scaler.fit(percentage_distance.values.reshape(-1, 1))
+
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         percentage_distance = (df["close"] - df["vwap"]) / df["close"]
-        vwap = self.__robust_scaler.fit_transform(percentage_distance.values.reshape(-1, 1))
+        vwap = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1))
         return pd.DataFrame({"vwap": vwap.flatten()}, index=df.index)
