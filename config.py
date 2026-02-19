@@ -48,9 +48,6 @@ PVO_SIGNAL = 9
 # --- Williams %R Parameters ---
 WILLR_LENGTH = 14
 
-# --- Exponential Moving Average Parameters ---
-EMA_LENGTH = 20
-
 # --- Super Trend Parameters ---
 SUPER_TREND_LENGTH = 7
 SUPER_TREND_MULTIPLIER = 3.0
@@ -61,10 +58,6 @@ LOG_RETURN_LENGTH = 20
 # --- Entropy Parameters ---
 ENTROPY_LENGTH = 10
 ENTROPY_BASE = 2
-
-# --- Z-Score Parameters ---
-ZSCORE_LENGTH = 30
-ZSCORE_STD = 1
 
 # --- ADX Parameters ---
 ADX_LENGTH = 14

@@ -5,9 +5,9 @@ from framework.analysis.indicators.base import Indicator
 from framework.analysis.indicators.candles import IntraDayCandle
 from framework.analysis.indicators.cycles import EvenBetterSineWave
 from framework.analysis.indicators.momentum import MovingAverageConvergenceDivergence, RelativeStrengthIndex, TTMSqueeze, PercentageVolumeOscillator, BalanceOfPower, WilliamsR
-from framework.analysis.indicators.overlap import ExponentialMovingAverage, SuperTrend, VolumeWeightedAveragePrice
+from framework.analysis.indicators.overlap import SuperTrend, VolumeWeightedAveragePrice
 from framework.analysis.indicators.performance import DrawDown, LogReturn
-from framework.analysis.indicators.statistics import Entropy, ZScore
+from framework.analysis.indicators.statistics import Entropy
 from framework.analysis.indicators.trend import AverageDirectionalIndex, AroonOscillator, ChoppinessIndex, ParabolicStopAndReverse, Vortex
 from framework.analysis.indicators.volatility import NormalizedAverageTrueRange, BollingerBands, UlcerIndex
 from framework.analysis.indicators.volume import ChaikinMoneyFlow, ElderForceIndex, MoneyFlowIndex, OnBalanceVolume
@@ -23,13 +23,11 @@ class TechnicalIndicators:
         PercentageVolumeOscillator(),
         BalanceOfPower(),
         WilliamsR(),
-        ExponentialMovingAverage(),
         SuperTrend(),
         VolumeWeightedAveragePrice(),
         DrawDown(),
         LogReturn(),
         Entropy(),
-        ZScore(),
         AverageDirectionalIndex(),
         AroonOscillator(),
         ChoppinessIndex(),

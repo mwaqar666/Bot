@@ -8,27 +8,7 @@ from sklearn.preprocessing import RobustScaler
 
 
 # -----------------
-# 1. Exponential Moving Average
-# -----------------
-class ExponentialMovingAverage(Indicator):
-    __robust_scaler = RobustScaler()
-
-    def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        ema = ta.ema(df["close"], length=config.EMA_LENGTH)
-
-        if ema is None or ema.empty:
-            raise ValueError("EMA calculation failed")
-
-        return pd.DataFrame({"ema": ema}, index=df.index)
-
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        percentage_distance = (df["close"] - df["ema"]) / df["close"]
-        ema = self.__robust_scaler.fit_transform(percentage_distance.values.reshape(-1, 1))
-        return pd.DataFrame({"ema": ema.flatten()}, index=df.index)
-
-
-# -----------------
-# 2. Super Trend
+# 1. Super Trend
 # -----------------
 class SuperTrend(Indicator):
     __robust_scaler = RobustScaler()
@@ -51,7 +31,7 @@ class SuperTrend(Indicator):
 
 
 # -----------------
-# 3. Volume Weighted Average Price
+# 2. Volume Weighted Average Price
 # -----------------
 class VolumeWeightedAveragePrice(Indicator):
     __robust_scaler = RobustScaler()

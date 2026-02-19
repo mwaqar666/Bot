@@ -39,21 +39,21 @@ class AroonOscillator(Indicator):
     __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        aroon = ta.aroon(df["high"], df["low"], length=config.AROON_LENGTH, scalar=config.AROON_SCALAR)
+        aroon_data = ta.aroon(df["high"], df["low"], length=config.AROON_LENGTH, scalar=config.AROON_SCALAR)
 
-        if aroon is None or aroon.empty:
+        if aroon_data is None or aroon_data.empty:
             raise ValueError("Aroon calculation failed")
 
-        aroon_up = aroon[f"AROONU_{config.AROON_LENGTH}"]
-        aroon_down = aroon[f"AROOND_{config.AROON_LENGTH}"]
-        aroon_osc = aroon[f"AROONOSC_{config.AROON_LENGTH}"]
+        aroon = aroon_data[f"AROONOSC_{config.AROON_LENGTH}"]
+        aroon_up = aroon_data[f"AROONU_{config.AROON_LENGTH}"]
+        aroon_down = aroon_data[f"AROOND_{config.AROON_LENGTH}"]
 
-        return pd.DataFrame({"aroon_up": aroon_up, "aroon_down": aroon_down, "aroon_osc": aroon_osc}, index=df.index)
+        return pd.DataFrame({"aroon_up": aroon_up, "aroon_down": aroon_down, "aroon": aroon}, index=df.index)
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cols = ["aroon_up", "aroon_down", "aroon_osc"]
-        aroon = self.__min_max_scaler.fit_transform(df[cols])
-        return pd.DataFrame(aroon, columns=cols, index=df.index)
+        aroon = self.__min_max_scaler.fit_transform(df[["aroon"]])
+
+        return pd.DataFrame({"aroon": aroon.flatten()}, index=df.index)
 
 
 # -----------------
@@ -114,18 +114,18 @@ class Vortex(Indicator):
     __scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        vortex = ta.vortex(df["high"], df["low"], df["close"], length=config.VORTEX_LENGTH)
+        vortex_data = ta.vortex(df["high"], df["low"], df["close"], length=config.VORTEX_LENGTH)
 
-        if vortex is None or vortex.empty:
+        if vortex_data is None or vortex_data.empty:
             raise ValueError("Vortex calculation failed")
 
-        vortex_p = vortex[f"VTXP_{config.VORTEX_LENGTH}"]
-        vortex_m = vortex[f"VTXM_{config.VORTEX_LENGTH}"]
-        vortex_osc = vortex_p - vortex_m
+        vortex_p = vortex_data[f"VTXP_{config.VORTEX_LENGTH}"]
+        vortex_m = vortex_data[f"VTXM_{config.VORTEX_LENGTH}"]
+        vortex = vortex_p - vortex_m
 
-        return pd.DataFrame({"vortex_p": vortex_p, "vortex_m": vortex_m, "vortex_osc": vortex_osc}, index=df.index)
+        return pd.DataFrame({"vortex_p": vortex_p, "vortex_m": vortex_m, "vortex": vortex}, index=df.index)
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cols = ["vortex_p", "vortex_m", "vortex_osc"]
-        vortex = self.__scaler.fit_transform(df[cols])
-        return pd.DataFrame(vortex, columns=cols, index=df.index)
+        vortex = self.__scaler.fit_transform(df[["vortex"]])
+
+        return pd.DataFrame({"vortex": vortex.flatten()}, index=df.index)
