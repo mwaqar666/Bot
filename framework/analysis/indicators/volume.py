@@ -1,7 +1,6 @@
 from .base import Indicator
 
 import config
-from framework.data.data_types import SignalDirection
 
 import pandas as pd
 import pandas_ta_classic as ta
@@ -12,10 +11,6 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 # 1. Chaikin Money Flow
 # -----------------
 class ChaikinMoneyFlow(Indicator):
-    """
-    Chaikin Money Flow.
-    """
-
     __robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -26,20 +21,6 @@ class ChaikinMoneyFlow(Indicator):
 
         return pd.DataFrame({"cmf": cmf}, index=df.index)
 
-    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
-        if "cmf" not in df.columns:
-            return SignalDirection.NONE
-
-        val = df["cmf"].iloc[current_idx]
-
-        # Zero Line Cross
-        if val > 0.05:
-            return SignalDirection.BUY
-        elif val < -0.05:
-            return SignalDirection.SELL
-
-        return SignalDirection.NONE
-
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cmf = self.__robust_scaler.fit_transform(df[["cmf"]])
         return pd.DataFrame({"cmf": cmf.flatten()}, index=df.index)
@@ -49,10 +30,6 @@ class ChaikinMoneyFlow(Indicator):
 # 2. Elder Force Index
 # -----------------
 class ElderForceIndex(Indicator):
-    """
-    Elder Force Index.
-    """
-
     __robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -63,21 +40,6 @@ class ElderForceIndex(Indicator):
 
         return pd.DataFrame({"efi": efi}, index=df.index)
 
-    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
-        if "efi" not in df.columns:
-            return SignalDirection.NONE
-
-        val = df["efi"].iloc[current_idx]
-        prev = df["efi"].iloc[current_idx - 1]
-
-        # Zero Cross
-        if prev < 0 and val > 0:
-            return SignalDirection.BUY
-        elif prev > 0 and val < 0:
-            return SignalDirection.SELL
-
-        return SignalDirection.NONE
-
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         efi = self.__robust_scaler.fit_transform(df[["efi"]])
         return pd.DataFrame({"efi": efi.flatten()}, index=df.index)
@@ -87,10 +49,6 @@ class ElderForceIndex(Indicator):
 # 3. Money Flow Index
 # -----------------
 class MoneyFlowIndex(Indicator):
-    """
-    Money Flow Index.
-    """
-
     __min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -101,20 +59,6 @@ class MoneyFlowIndex(Indicator):
 
         return pd.DataFrame({"mfi": mfi}, index=df.index)
 
-    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
-        if "mfi" not in df.columns:
-            return SignalDirection.NONE
-
-        val = df["mfi"].iloc[current_idx]
-
-        # Overbought/Oversold
-        if val < 20:
-            return SignalDirection.BUY
-        elif val > 80:
-            return SignalDirection.SELL
-
-        return SignalDirection.NONE
-
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         mfi = self.__min_max_scaler.fit_transform(df[["mfi"]])
         return pd.DataFrame({"mfi": mfi.flatten()}, index=df.index)
@@ -124,10 +68,6 @@ class MoneyFlowIndex(Indicator):
 # 4. On-Balance Volume (OBV)
 # -----------------
 class OnBalanceVolume(Indicator):
-    """
-    On-Balance Volume.
-    """
-
     __robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -137,10 +77,6 @@ class OnBalanceVolume(Indicator):
             raise ValueError("On-Balance Volume calculation failed")
 
         return pd.DataFrame({"obv": obv}, index=df.index)
-
-    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
-        # OBV is primarily for divergence or trend confirmation.
-        return SignalDirection.NONE
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         obv_diff = df["obv"].diff().fillna(0)
@@ -152,12 +88,6 @@ class OnBalanceVolume(Indicator):
 # 5. Volume Profile (VP)
 # -----------------
 class VolumeProfile(Indicator):
-    """
-    Volume Profile.
-    Note: Returns price levels, hard to map to time series directly without logic.
-    For now, we keep it disabled or experimental.
-    """
-
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         # VP calculation logic in pandas_ta returns a DF with different index (price buckets)
         # So we cannot easily attach it to the main DF without complex logic.
@@ -175,5 +105,5 @@ class VolumeProfile(Indicator):
 
         return pd.DataFrame({}, index=df.index)
 
-    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
-        return SignalDirection.NONE
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        return pd.DataFrame({}, index=df.index)

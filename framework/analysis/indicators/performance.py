@@ -1,7 +1,6 @@
 from .base import Indicator
 
 import config
-from framework.data.data_types import SignalDirection
 
 import pandas as pd
 import pandas_ta_classic as ta
@@ -12,10 +11,6 @@ from sklearn.preprocessing import RobustScaler
 # 1. Draw Down
 # -----------------
 class DrawDown(Indicator):
-    """
-    Draw Down.
-    """
-
     __robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -30,10 +25,6 @@ class DrawDown(Indicator):
 
         return pd.DataFrame({"dd": dd, "dd_pct": dd_pct, "dd_log": dd_log}, index=df.index)
 
-    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
-        # Drawdown is a risk metric, generally not a signal generator.
-        return SignalDirection.NONE
-
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         dd_pct = self.__robust_scaler.fit_transform(df[["dd_pct"]])
         return pd.DataFrame({"dd_pct": dd_pct.flatten()}, index=df.index)
@@ -43,10 +34,6 @@ class DrawDown(Indicator):
 # 2. Log Return
 # -----------------
 class LogReturn(Indicator):
-    """
-    Log Return.
-    """
-
     __robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -56,10 +43,6 @@ class LogReturn(Indicator):
             raise ValueError("Log return calculation failed")
 
         return pd.DataFrame({"log_return": log_return}, index=df.index)
-
-    def signal(self, df: pd.DataFrame, current_idx: int = -1) -> SignalDirection:
-        # Returns are features for ML, not typically direct signals.
-        return SignalDirection.NONE
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         log_return = self.__robust_scaler.fit_transform(df[["log_return"]])

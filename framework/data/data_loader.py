@@ -20,7 +20,7 @@ class DataLoader:
         """
         self.__exchange = ccxt.binance({"enableRateLimit": True})
 
-    def fetch_historical_data(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, days: int = config.DATA_LOOKBACK_DAYS, save_to_disk: bool = False) -> Optional[pd.DataFrame]:
+    def fetch_historical_data(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, days: int = config.DATA_LOOKBACK_DAYS) -> Optional[pd.DataFrame]:
         """
         Downloads historical OHLCV data from Binance.
 
@@ -28,7 +28,6 @@ class DataLoader:
             symbol (str): The trading pair symbol (e.g., 'BTC/USDT').
             timeframe (str): The timeframe for the candles (e.g., '15m').
             days (int): Number of days of historical data to fetch.
-            save_to_disk (bool): Whether to save the data to a CSV file.
 
         Returns:
             Optional[pd.DataFrame]: A DataFrame containing the historical data,
@@ -45,9 +44,6 @@ class DataLoader:
 
         for col in df.columns:
             df[col] = df[col] if col == "timestamp" else df[col].astype(float)
-
-        if save_to_disk:
-            self.save_to_csv(df, symbol, timeframe)
 
         return df
 
@@ -77,7 +73,7 @@ class DataLoader:
 
         return df
 
-    def save_to_csv(self, df: pd.DataFrame, symbol: str, timeframe: str) -> str:
+    def save_to_csv(self, df: pd.DataFrame, symbol: str, timeframe: str, suffix: str = "") -> str:
         """
         Saves the DataFrame to a CSV file.
 
@@ -85,8 +81,9 @@ class DataLoader:
             df (pd.DataFrame): The data to save.
             symbol (str): The trading pair symbol.
             timeframe (str): The timeframe string.
+            suffix (str): Suffix to append to the filename.
         """
-        filename = self.__get_file_path(symbol, timeframe)
+        filename = self.__get_file_path(symbol, timeframe, suffix)
 
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         df.to_csv(filename)
@@ -165,16 +162,17 @@ class DataLoader:
 
         return df
 
-    def __get_file_path(self, symbol: str, timeframe: str) -> str:
+    def __get_file_path(self, symbol: str, timeframe: str, suffix: str = "") -> str:
         """
         Constructs the standard file path for data.
 
         Args:
             symbol (str): The trading pair symbol.
             timeframe (str): The timeframe string.
+            suffix (str): Suffix to append to the filename.
 
         Returns:
             str: Relative path to the CSV file.
         """
         safe_symbol = symbol.replace("/", "_").replace(":", "_")
-        return f"framework/data/{safe_symbol}_{timeframe}.csv"
+        return f"framework/data/{safe_symbol}_{timeframe}{suffix}.csv"

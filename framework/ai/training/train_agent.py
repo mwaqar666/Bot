@@ -1,128 +1,134 @@
 import os
-
 import pandas as pd
+import numpy as np
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv
-from data_engine.feature_engineer import FeatureEngineer
-from rl_env.trading_env import CryptoTradingEnv
-from ai_bot.models.transformer_policy import TransformerFeatureExtractor
+from stable_baselines3.common.vec_env import DummyVecEnv, VecEnv, SubprocVecEnv
+from stable_baselines3.common.callbacks import BaseCallback
+
+from framework.ai.training.trading_env import CryptoTradingEnv
+from framework.ai.models.transformer_feature_extractor import TransformerFeatureExtractor
+
+# --- Configuration ---
+BASE_DIR = r"c:\Users\mwaqa\Desktop\Bot"
+DATA_PATH = os.path.join(BASE_DIR, "framework", "data", "BTC_USDT_5m.csv")
+MODEL_SAVE_PATH = os.path.join(BASE_DIR, "framework", "ai", "models", "ppo_transformer_v1")
+LOG_DIR = os.path.join(BASE_DIR, "framework", "ai", "logs")
+
+WINDOW_SIZE = 60  # Look back 60 candles (5 hours)
+TOTAL_TIMESTEPS = 1_000_000
+
+# Raw Features to process
+RAW_FEATURES = ["close", "volume", "rsi", "macd", "macd_signal", "macd_hist", "bb_upper", "bb_lower", "atr", "adx", "stochrsi_k", "stochrsi_d"]
 
 
-def load_training_data() -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+class TensorboardCallback(BaseCallback):
     """
-    Loads base 15m data and additional context dataframes (30m, 1h, 4h).
-    Returns:
-        Tuple[pd.DataFrame, Dict[str, pd.DataFrame]]: Base DF and Context Dict.
+    Custom callback for plotting additional values in tensorboard.
     """
-    base_path = "ai_bot/data_engine/BTC_USDT_USDT_15m.csv"
-    if not os.path.exists(base_path):
-        raise FileNotFoundError(f"Base data {base_path} not found.")
 
-    print(f"Loading Base Data from {base_path}...")
-    df = pd.read_csv(base_path, index_col="timestamp", parse_dates=True)
+    def __init__(self, verbose=0):
+        super(TensorboardCallback, self).__init__(verbose)
 
-    context_files = {
-        "30m": "ai_bot/data_engine/BTC_USDT_USDT_30m.csv",
-        "1h": "ai_bot/data_engine/BTC_USDT_USDT_1h.csv",
-        "4h": "ai_bot/data_engine/BTC_USDT_USDT_4h.csv",
-    }
-
-    additional_dfs = {}
-    for name, path in context_files.items():
-        if os.path.exists(path):
-            print(f"Loading Context {name}...")
-            additional_dfs[name] = pd.read_csv(path, index_col="timestamp", parse_dates=True)
-        else:
-            print(f"Warning: {name} context missing.")
-
-    return df, additional_dfs
+    def _on_step(self) -> bool:
+        if self.locals.get("infos"):
+            info = self.locals["infos"][0]
+            self.logger.record("custom/net_worth", info.get("net_worth"))
+            self.logger.record("custom/position", info.get("pos"))
+        return True
 
 
-def prepare_features(df: pd.DataFrame, context_dfs: dict[str, pd.DataFrame]) -> tuple[pd.DataFrame, list[str]]:
+def load_data(path: str) -> tuple[pd.DataFrame, list[str]]:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Data file not found: {path}")
+
+    print(f"Loading data from {path}...")
+    df = pd.read_csv(path)
+
+    # Validation
+    missing = [f for f in RAW_FEATURES if f not in df.columns]
+    if missing:
+        raise ValueError(f"Missing columns: {missing}")
+
+    # Create Normalized Features for the Agent
+    # We leave original columns untouched for the Environment logic (PnL, Stop Loss)
+    agent_features = []
+
+    for col in RAW_FEATURES:
+        norm_col_name = f"{col}_norm"
+        # Robust Scaling (Median/IQR) or Z-Score (Mean/Std)
+        # Using Z-Score for simplicity and neural net compatibility
+        mean = df[col].mean()
+        std = df[col].std()
+
+        # Avoid division by zero
+        if std == 0:
+            std = 1
+
+        df[norm_col_name] = (df[col] - mean) / std
+        agent_features.append(norm_col_name)
+
+    print("Data Normalized. Agent will see columns ending in '_norm'.")
+    return df, agent_features
+
+
+def make_env(df, features, rank, seed=0):
     """
-    Engines features using FeatureEngineer.
-    Returns:
-        Tuple[pd.DataFrame, List[str]]: Processed DF and list of feature columns.
+    Utility function for multiprocessed env.
     """
-    print("Engaging Feature Engineering...")
-    engineer = FeatureEngineer()
-    df_processed = engineer.process_data(df, additional_dfs=context_dfs)
-    df_processed.sort_index(inplace=True)
 
-    all_features = engineer.get_state_columns()
-    available_features = [f for f in all_features if f in df_processed.columns]
+    def _init():
+        env = CryptoTradingEnv(
+            df=df,
+            features=features,  # Agent sees normalized features
+            window_size=WINDOW_SIZE,
+            initial_balance=1000.0,
+        )
+        env.reset(seed=seed + rank)
+        return env
 
-    print(f"Features Prepared: {len(available_features)}")
-
-    # Debug: Save Processed Data
-    debug_path = "ai_bot/data_engine/debug_features.csv"
-    print(f"DEBUG: Saving processed features to {debug_path}...")
-    df_processed.to_csv(debug_path)
-
-    return df_processed, available_features
+    return _init
 
 
-def create_training_env(df: pd.DataFrame, features: list[str], window_size: int = 60) -> VecEnv:
-    """Creates the Vectorized Gym Environment."""
-    print(f"Creating Environment (Window={window_size})...")
-    return DummyVecEnv([lambda: CryptoTradingEnv(df, features=features, window_size=window_size)])
+def train():
+    print("--- Starting AI Training Session ---")
 
+    # 1. Load Data
+    df, agent_features = load_data(DATA_PATH)
+    print(f"Data Rows: {len(df)}")
+    print(f"Agent Features: {agent_features}")
 
-def initialize_ppo_agent(env: VecEnv) -> PPO:
-    """Initializes the PPO Agent with Transformer Policy."""
-    print("Initializing PPO with Transformer...")
+    # 2. Split Data
+    split_idx = int(len(df) * 0.8)
+    train_df = df.iloc[:split_idx].reset_index(drop=True)
+    val_df = df.iloc[split_idx:].reset_index(drop=True)
+
+    # 3. Create Environment
+    # We pass the full dataframe (with raw & norm columns) and the list of norm columns
+    env = DummyVecEnv([make_env(train_df, agent_features, i) for i in range(1)])
+
+    # 4. Initialize PPO
+    print("Initializing PPO Agent...")
+
     policy_kwargs = dict(
         features_extractor_class=TransformerFeatureExtractor,
         features_extractor_kwargs=dict(features_dim=128),
+        # You can also customize the net_arch here
     )
 
-    return PPO(
-        "MlpPolicy",
-        env,
-        verbose=1,
-        policy_kwargs=policy_kwargs,
-        learning_rate=3e-4,
-        n_steps=2048,
-        batch_size=64,
-        ent_coef=0.01,  # Force Exploration
-        gamma=0.95,  # Discount Factor
-        gae_lambda=0.9,
-        tensorboard_log="./tensorboard_logs/",
-    )
+    model = PPO("MlpPolicy", env, verbose=1, policy_kwargs=policy_kwargs, learning_rate=3e-4, n_steps=2048, batch_size=64, gamma=0.99, gae_lambda=0.95, tensorboard_log=LOG_DIR, device="auto")
 
-
-def train_model_orchestrator():
-    """Main Orchestrator function."""
-    print("--- Starting AI Training Session ---")
-
+    # 5. Train
+    print(f"Training for {TOTAL_TIMESTEPS} steps...")
     try:
-        # 1. Load Data
-        df, context_dfs = load_training_data()
+        model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=TensorboardCallback())
+    except KeyboardInterrupt:
+        print("Training interrupted manually. Saving current model...")
 
-        # 2. Prepare Features
-        df_processed, features = prepare_features(df, context_dfs)
-
-        # 3. Create Env
-        env = create_training_env(df_processed, features)
-
-        # 4. Init Agent
-        model = initialize_ppo_agent(env)
-        print(model.policy)
-
-        # 5. Train
-        # Increase steps to allow Transformer to learn complex patterns (was 100k)
-        print("Training for 250,000 steps...")
-        model.learn(total_timesteps=250000)
-
-        # 6. Save
-        save_path = "ai_bot/models/ppo_transformer_bot"
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        model.save(save_path)
-        print(f"Model saved to {save_path}.zip")
-
-    except Exception as e:
-        print(f"Critical Error: {e}")
+    # 6. Save
+    print(f"Saving model to {MODEL_SAVE_PATH}...")
+    model.save(MODEL_SAVE_PATH)
+    print("Done.")
 
 
 if __name__ == "__main__":
-    train_model_orchestrator()
+    train()

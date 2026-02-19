@@ -17,5 +17,6 @@ dependencies:
   - scikit-learn
   - ccxt-py
   - ipykernel
+  - ta-lib
   - pip:
     - pandas-ta-classic

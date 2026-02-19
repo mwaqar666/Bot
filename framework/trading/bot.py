@@ -5,8 +5,8 @@ import config
 
 from framework.analysis.technical_indicators import TechnicalIndicators
 from framework.data.data_loader import DataLoader
-from framework.data.data_types import Position, TradeSignal
-from framework.strategies.momentum_strategy import MomentumStrategy
+from framework.data.data_types import Position, TradeSignal, SignalDirection
+from framework.inference import AI_Analyst
 from framework.trading.execution import TradeExecutor
 
 
@@ -31,7 +31,8 @@ class TradingBot:
         self.timeframe = config.TIMEFRAME
 
         self.data_loader = DataLoader()
-        self.strategy = MomentumStrategy()
+        self.ai_analyst = AI_Analyst()
+        self.ai_analyst.load_model()
         self.technical_indicators = TechnicalIndicators()
 
         # Set Leverage
@@ -54,12 +55,38 @@ class TradingBot:
         try:
             df = self.__fetch_market_data()
 
-            algo_signal = self.strategy.analyze(df)
-            print(f"ALGO: {algo_signal.direction.upper()}")
+            ai_action, ai_confidence = self.ai_analyst.analyze(df)
+            print(f"AI: {ai_action.upper()} ({ai_confidence:.2f})")
+
+            # Create TradeSignal from AI Action
+            signal_direction = SignalDirection.NONE
+            if ai_action == "buy":
+                signal_direction = SignalDirection.BUY
+            elif ai_action == "sell":
+                signal_direction = SignalDirection.SELL
+
+            # Calculate SL/TP based on ATR
+            current_price = df["close"].iloc[-1]
+            atr = df["atr"].iloc[-1]
+
+            sl_price = 0.0
+            tp_price = 0.0
+
+            if signal_direction == SignalDirection.BUY:
+                sl_price = current_price - (atr * config.SL_ATR_MULTIPLIER)
+                tp_price = current_price + (atr * config.TP_ATR_MULTIPLIER)
+            elif signal_direction == SignalDirection.SELL:
+                sl_price = current_price + (atr * config.SL_ATR_MULTIPLIER)
+                tp_price = current_price - (atr * config.TP_ATR_MULTIPLIER)
+
+            ai_signal = TradeSignal(direction=signal_direction, price=current_price, stop_loss=sl_price, take_profit=tp_price, reason=f"AI Model (Conf: {ai_confidence:.2f})", confidence=ai_confidence)
 
             position = self.executor.get_position(self.symbol)
 
-            self.__handle_open_position(position, algo_signal) if position is not None else self.__check_for_entry(algo_signal)
+            if position is not None:
+                self.__handle_open_position(position, ai_signal)
+            else:
+                self.__check_for_entry(ai_signal)
         except ValueError as e:
             print(f"Error: Could not fetch data. Skipping cycle. {e}")
             return
@@ -80,23 +107,22 @@ class TradingBot:
 
         return self.technical_indicators.add_indicators(df)
 
-    def __handle_open_position(self, position: Position, algo_signal: TradeSignal) -> None:
+    def __handle_open_position(self, position: Position, signal: TradeSignal) -> None:
         """
         Manages exits and flips for open positions.
 
         Args:
             position (Position): Current open position object.
-            algo_signal (TradeSignal): Signal from the strategy.
-            ai_decision (str): Decision from the AI model (buy/sell/hold).
+            signal (TradeSignal): Signal from the AI.
 
         Returns:
             None
         """
         self.__log_position_status(position)
 
-        should_flip = self.__check_reversal(position, algo_signal, ai_decision)
+        should_flip = self.__check_reversal(position, signal)
         if should_flip:
-            self.__execute_flip(position, algo_signal)
+            self.__execute_flip(position, signal)
 
     def __log_position_status(self, position: Position) -> None:
         """
@@ -111,35 +137,32 @@ class TradingBot:
         print(f"OPEN POSITION: {position.side.upper()} {position.amount} {self.symbol}")
         print(f"Unrealized PnL: {position.unrealized_pnl} USDT")
 
-    def __check_reversal(self, position: Position, algo_signal: TradeSignal, ai_decision: str) -> bool:
+    def __check_reversal(self, position: Position, signal: TradeSignal) -> bool:
         """
         Checks if a reversal signal exists.
 
         Args:
             position (Position): Current open position.
-            algo_signal (TradeSignal): New strategy signal.
-            ai_decision (str): New AI decision.
+            signal (TradeSignal): New strategy signal.
 
         Returns:
             bool: True if a reversal is indicated, False otherwise.
         """
-        if position.side == "long":
-            if algo_signal.direction == "sell" or ai_decision == "sell":
-                print("Exit Signal: Reversal detected (Long -> Short)")
-                return True
-        elif position.side == "short":
-            if algo_signal.direction == "buy" or ai_decision == "buy":
-                print("Exit Signal: Reversal detected (Short -> Long)")
-                return True
+        if position.side == "long" and signal.direction == SignalDirection.SELL:
+            print("Exit Signal: Reversal detected (Long -> Short)")
+            return True
+        elif position.side == "short" and signal.direction == SignalDirection.BUY:
+            print("Exit Signal: Reversal detected (Short -> Long)")
+            return True
         return False
 
-    def __execute_flip(self, position: Position, algo_signal: TradeSignal) -> None:
+    def __execute_flip(self, position: Position, signal: TradeSignal) -> None:
         """
         Executes Stop & Reverse: Closes current position and attempts to open new one.
 
         Args:
             position (Position): The position to close.
-            algo_signal (TradeSignal): The signal indicating the new direction.
+            signal (TradeSignal): The signal indicating the new direction.
 
         Returns:
             None
@@ -152,22 +175,22 @@ class TradingBot:
         close_side = "sell" if position.side == "long" else "buy"
         self.executor.place_order(self.symbol, close_side, position.amount)
 
-        self.__attempt_flip_entry(close_side, position, algo_signal)
+        self.__attempt_flip_entry(close_side, position, signal)
 
-    def __attempt_flip_entry(self, direction: str, position: Position, algo_signal: TradeSignal) -> None:
+    def __attempt_flip_entry(self, direction: str, position: Position, signal: TradeSignal) -> None:
         """
         Attempts to enter a new position after closing the old one.
 
         Args:
             direction (str): The direction of the closed trade (which becomes the new entry direction).
             position (Position): The closed position object (for PnL estimation).
-            algo_signal (TradeSignal): The valid trade signal used for calculating new entry.
+            signal (TradeSignal): The valid trade signal used for calculating new entry.
 
         Returns:
             None
         """
-        if algo_signal.direction != direction:
-            print(f"Position Closed. No Flip (Algo is {algo_signal.direction}). Going to Cash.")
+        if signal.direction != direction:
+            print(f"Position Closed. No Flip (AI is {signal.direction}). Going to Cash.")
             return
 
         print(f"Algo confirms {direction.upper()}. Executing FLIP Entry...")
@@ -175,74 +198,49 @@ class TradingBot:
         balance = self.executor.get_balance("USDT")
         estimated_balance = balance + float(position.unrealized_pnl)
 
-        amount = self.__calculate_position_size(estimated_balance, algo_signal)
+        amount = self.__calculate_position_size(estimated_balance, signal)
         if amount > 0:
-            self.__place_entry_order(direction, amount, algo_signal)
+            self.__place_entry_order(direction, amount, signal)
             print("Flip Complete via Stop & Reverse!")
 
-    def __check_for_entry(self, algo_signal: TradeSignal, ai_decision: str) -> None:
+    def __check_for_entry(self, signal: TradeSignal) -> None:
         """
-        Checks confluence and executes fresh entries.
+        Checks for entry signals.
 
         Args:
-            algo_signal (TradeSignal): Strategy signal.
-            ai_decision (str): AI decision.
+            signal (TradeSignal): AI signal.
 
         Returns:
             None
         """
-        final_direction = self.__get_confluence_direction(algo_signal, ai_decision)
-
-        if final_direction != "none":
-            self.__execute_entry(final_direction, algo_signal)
+        if signal.direction != SignalDirection.NONE:
+            self.__execute_entry(signal.direction, signal)
         else:
-            print("No valid confluence signal. Waiting...")
+            print("No valid signal. Waiting...")
 
-    def __get_confluence_direction(self, algo_signal: TradeSignal, ai_decision: str) -> str:
-        """
-        Determines direction based on Algo and AI agreement.
-
-        Args:
-            algo_signal (TradeSignal): Strategy signal.
-            ai_decision (str): AI decision.
-
-        Returns:
-            str: 'buy', 'sell', or 'none'.
-        """
-        if algo_signal.direction == "buy" and ai_decision == "buy":
-            print(">>> CONFLUENCE DETECTED: STRONG BUY (LONG) <<<")
-            return "buy"
-        elif algo_signal.direction == "sell" and ai_decision == "sell":
-            print(">>> CONFLUENCE DETECTED: STRONG SELL (SHORT) <<<")
-            return "sell"
-        elif algo_signal.direction != "none" and ai_decision != algo_signal.direction:
-            print(f"CONFLICT: Algo={algo_signal.direction.upper()} vs AI={ai_decision.upper()}.")
-            return "none"
-        return "none"
-
-    def __execute_entry(self, direction: str, algo_signal: TradeSignal) -> None:
+    def __execute_entry(self, direction: str, signal: TradeSignal) -> None:
         """
         Calculates size and places fresh entry order.
 
         Args:
             direction (str): 'buy' or 'sell'.
-            algo_signal (TradeSignal): Validated trade signal.
+            signal (TradeSignal): Validated trade signal.
 
         Returns:
             None
         """
-        print(f"SIGNAL CONFIRMED: {direction.upper()} | Reason: {algo_signal.reason}")
-        print(f"Price: {algo_signal.price} | SL: {algo_signal.stop_loss:.2f} | TP: {algo_signal.take_profit:.2f}")
+        print(f"SIGNAL CONFIRMED: {direction.upper()} | Reason: {signal.reason}")
+        print(f"Price: {signal.price} | SL: {signal.stop_loss:.2f} | TP: {signal.take_profit:.2f}")
 
         balance = self.executor.get_balance("USDT")
         if balance < 10:
             print("Balance too low to trade.")
             return
 
-        amount = self.__calculate_position_size(balance, algo_signal)
+        amount = self.__calculate_position_size(balance, signal)
         if amount > 0:
             print(f"Placing {direction.upper()} order for {amount} {self.symbol}...")
-            self.__place_entry_order(direction, amount, algo_signal)
+            self.__place_entry_order(direction, amount, signal)
             print("Entry Order Placed with SL/TP!")
 
     def __place_entry_order(self, direction: str, amount: float, signal: TradeSignal) -> None:

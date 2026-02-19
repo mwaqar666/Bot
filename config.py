@@ -14,14 +14,14 @@ IS_TESTNET = True  # Set to False for real money
 
 # --- Trading Parameters ---
 SYMBOL = "BTC/USDT"  # The pair we are trading
-TIMEFRAME = "1m"  # Candle timeframe
+TIMEFRAME = "5m"  # Candle timeframe
 MAX_LEVERAGE = 50  # Maximum allowable leverage (safety cap)
 RISK_PER_TRADE = 0.01  # Risk 1% of account balance per trade
-DATA_LOOKBACK_DAYS = 30  # Number of days of data to look back
+DATA_LOOKBACK_DAYS = 365  # Number of days of data to look back
 
-# --- Awesome Oscillator Parameters ---
-AO_FAST = 5
-AO_SLOW = 34
+# --- Even Better Sine Wave Parameters ---
+EBSW_LENGTH = 40
+EBSW_BARS = 10
 
 # --- Moving Average Convergence Divergence Parameters ---
 MACD_FAST = 12
@@ -33,12 +33,6 @@ RSI_LENGTH = 14
 RSI_OVERBOUGHT = 70
 RSI_OVERSOLD = 30
 
-# --- Stochastic RSI Parameters ---
-STOCHRSI_LENGTH = 14
-STOCHRSI_RSI_LENGTH = 14
-STOCHRSI_K = 3
-STOCHRSI_D = 3
-
 # --- John Carter's TTM Squeeze Parameters ---
 SQUEEZE_KC_LENGTH = 20
 SQUEEZE_KC_SCALAR = 1.5
@@ -46,16 +40,16 @@ SQUEEZE_MOM_LENGTH = 12
 SQUEEZE_MOM_SMOOTH = 6
 SQUEEZE_MA_MODE = "ema"
 
-# --- Arnaud Legoux Moving Average Parameters ---
-ALMA_LENGTH = 10
-ALMA_SIGMA = 6.0
-ALMA_DISTRIBUTION_OFFSET = 0.85
+# --- Percentage Volume Oscillator Parameters ---
+PVO_FAST = 12
+PVO_SLOW = 26
+PVO_SIGNAL = 9
+
+# --- Williams %R Parameters ---
+WILLR_LENGTH = 14
 
 # --- Exponential Moving Average Parameters ---
 EMA_LENGTH = 20
-
-# --- Hull Moving Average Parameters ---
-HMA_LENGTH = 10
 
 # --- Super Trend Parameters ---
 SUPER_TREND_LENGTH = 7
@@ -67,13 +61,6 @@ LOG_RETURN_LENGTH = 20
 # --- Entropy Parameters ---
 ENTROPY_LENGTH = 10
 ENTROPY_BASE = 2
-
-# --- Mean Absolute Deviation Parameters ---
-MAD_LENGTH = 30
-
-# --- Standard Deviation Parameters ---
-STD_DEV_LENGTH = 30
-STD_DEV_DDOF = 1
 
 # --- Z-Score Parameters ---
 ZSCORE_LENGTH = 30
