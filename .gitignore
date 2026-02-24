@@ -6,6 +6,9 @@
 # Environment File
 .env
 
+# Logs
+logs
+
 # Genrated Graphs & Images
 *.png
 

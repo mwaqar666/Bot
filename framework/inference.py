@@ -1,7 +1,9 @@
 import os
 import pandas as pd
 from stable_baselines3 import PPO
+
 from framework.analysis.technical_indicators import TechnicalIndicators
+from framework.data.data_types import SignalDirection
 
 
 class AI_Analyst:
@@ -10,12 +12,12 @@ class AI_Analyst:
     Loads the trained model and predicts the next move.
     """
 
-    def __init__(self, model_path="ai_bot/models/ppo_trading_bot"):
+    def __init__(self, model_path="ai_bot/models/ppo_trading_bot") -> None:
         self.model_path = model_path
         self.model = None
         self.engineer = TechnicalIndicators()
 
-    def load_model(self):
+    def load_model(self) -> None:
         try:
             # Check if model exists
             if not os.path.exists(self.model_path + ".zip"):
@@ -27,7 +29,7 @@ class AI_Analyst:
         except Exception as e:
             print(f"Failed to load AI model: {e}")
 
-    def analyze(self, df: pd.DataFrame):
+    def analyze(self, df: pd.DataFrame) -> SignalDirection:
         """
         Analyzes the market data and returns a trading signal.
         Args:
@@ -37,7 +39,7 @@ class AI_Analyst:
             confidence (float): Probability of the action
         """
         if self.model is None:
-            return "hold", 0.0
+            return SignalDirection.HOLD, 0.0
 
         try:
             # Feature Engineering (Level 2 Max)

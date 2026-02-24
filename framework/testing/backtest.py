@@ -3,7 +3,7 @@ import os
 import config
 
 from framework.data_engine.feature_engineer import FeatureEngineer
-from framework.ai.training.trading_env import CryptoTradingEnv
+from framework.ai.training.trading_env import TradingEnvironment
 from framework.models.transformer_policy import TransformerFeatureExtractor
 
 import pandas as pd
@@ -92,7 +92,7 @@ class Backtester:
 
     def setup_backtest_env(self, df: pd.DataFrame, features: list[str]) -> DummyVecEnv:
         """Initializes the Trading Environment."""
-        return DummyVecEnv([lambda: CryptoTradingEnv(df, features=features, window_size=self.window_size)])
+        return DummyVecEnv([lambda: TradingEnvironment(df, features=features, window_size=self.window_size)])
 
     def load_agent(self, env: DummyVecEnv) -> PPO:
         """Loads the trained PPO Agent with custom policy objects."""

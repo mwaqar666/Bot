@@ -15,8 +15,10 @@ dependencies:
   - stable-baselines3
   - pytorch
   - scikit-learn
+  - tensorboard
   - ccxt-py
-  - ipykernel
   - ta-lib
+  - ipykernel
+  - setuptools
   - pip:
     - pandas-ta-classic

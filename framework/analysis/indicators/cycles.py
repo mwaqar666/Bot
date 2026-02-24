@@ -22,4 +22,4 @@ class EvenBetterSineWave(Indicator):
         pass
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        return pd.DataFrame({"ebsw": df["ebsw"]}, index=df.index)
+        return pd.DataFrame({"ebsw": df["ebsw"].clip(-5, 5)}, index=df.index)

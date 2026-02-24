@@ -26,7 +26,7 @@ class ChaikinMoneyFlow(Indicator):
         self.__robust_scaler.fit(df[["cmf"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cmf = self.__robust_scaler.transform(df[["cmf"]])
+        cmf = self.__robust_scaler.transform(df[["cmf"]]).clip(-5, 5)
         return pd.DataFrame({"cmf": cmf.flatten()}, index=df.index)
 
 
@@ -49,7 +49,7 @@ class ElderForceIndex(Indicator):
         self.__robust_scaler.fit(df[["efi"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        efi = self.__robust_scaler.transform(df[["efi"]])
+        efi = self.__robust_scaler.transform(df[["efi"]]).clip(-5, 5)
         return pd.DataFrame({"efi": efi.flatten()}, index=df.index)
 
 
@@ -72,7 +72,7 @@ class MoneyFlowIndex(Indicator):
         self.__min_max_scaler.fit(df[["mfi"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        mfi = self.__min_max_scaler.transform(df[["mfi"]])
+        mfi = self.__min_max_scaler.transform(df[["mfi"]]).clip(-5, 5)
         return pd.DataFrame({"mfi": mfi.flatten()}, index=df.index)
 
 
@@ -97,7 +97,7 @@ class OnBalanceVolume(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         obv_diff = df["obv"].diff().fillna(0)
-        obv = self.__robust_scaler.transform(obv_diff.values.reshape(-1, 1))
+        obv = self.__robust_scaler.transform(obv_diff.values.reshape(-1, 1)).clip(-5, 5)
         return pd.DataFrame({"obv": obv.flatten()}, index=df.index)
 
 

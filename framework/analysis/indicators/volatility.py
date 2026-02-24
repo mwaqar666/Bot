@@ -11,8 +11,8 @@ from sklearn.preprocessing import RobustScaler
 # 1. Average True Range
 # -----------------
 class AverageTrueRange(Indicator):
-    def __init__(self) -> None:
-        self.__robust_scaler = RobustScaler()
+    # def __init__(self) -> None:
+    # self.__robust_scaler = RobustScaler()
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         atr = ta.atr(df["high"], df["low"], df["close"], length=config.ATR)
@@ -23,13 +23,12 @@ class AverageTrueRange(Indicator):
         return pd.DataFrame({"atr": atr}, index=df.index)
 
     def fit_scaler(self, df: pd.DataFrame) -> None:
-        norm_atr = df["atr"] / df["close"]
-        self.__robust_scaler.fit(norm_atr.values.reshape(-1, 1))
+        # norm_atr = df["atr"] / df["close"]
+        # self.__robust_scaler.fit(norm_atr.values.reshape(-1, 1))
+        pass
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        norm_atr = df["atr"] / df["close"]
-        atr = self.__robust_scaler.transform(norm_atr.values.reshape(-1, 1))
-        return pd.DataFrame({"atr": atr.flatten()}, index=df.index)
+        return pd.DataFrame({"atr": df["atr"]}, index=df.index)
 
 
 # -----------------
@@ -43,7 +42,7 @@ class NormalizedAverageTrueRange(Indicator):
         natr = ta.natr(df["high"], df["low"], df["close"], length=config.ATR)
 
         if natr is None or natr.empty:
-            raise ValueError("ATR calculation failed")
+            raise ValueError("Normalized ATR calculation failed")
 
         return pd.DataFrame({"natr": natr}, index=df.index)
 
@@ -51,7 +50,7 @@ class NormalizedAverageTrueRange(Indicator):
         self.__robust_scaler.fit(df[["natr"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        natr = self.__robust_scaler.transform(df[["natr"]])
+        natr = self.__robust_scaler.transform(df[["natr"]]).clip(-5, 5)
         return pd.DataFrame({"natr": natr.flatten()}, index=df.index)
 
 
@@ -80,7 +79,7 @@ class BollingerBands(Indicator):
         self.__robust_scaler.fit(df[["bb_width"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        bb_width = self.__robust_scaler.transform(df[["bb_width"]])
+        bb_width = self.__robust_scaler.transform(df[["bb_width"]]).clip(-5, 5)
         return pd.DataFrame({"bb_width": bb_width.flatten()}, index=df.index)
 
 
@@ -103,5 +102,5 @@ class UlcerIndex(Indicator):
         self.__robust_scaler.fit(df[["ui"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        ui = self.__robust_scaler.transform(df[["ui"]])
+        ui = self.__robust_scaler.transform(df[["ui"]]).clip(-5, 5)
         return pd.DataFrame({"ui": ui.flatten()}, index=df.index)

@@ -1,7 +1,5 @@
 from .base import Indicator
 
-import config
-
 import pandas as pd
 from sklearn.preprocessing import RobustScaler
 
@@ -30,6 +28,6 @@ class IntraDayCandle(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = ["rel_body", "upper_wick", "lower_wick"]
-        candles = self.__robust_scaler.transform(df[cols])
+        candles = self.__robust_scaler.transform(df[cols]).clip(-5, 5)
 
         return pd.DataFrame(candles, columns=cols, index=df.index)

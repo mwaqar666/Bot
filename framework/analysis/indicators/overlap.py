@@ -31,7 +31,7 @@ class SuperTrend(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         percentage_distance = (df["close"] - df["st"]) / df["close"]
-        st = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1))
+        st = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1)).clip(-5, 5)
         return pd.DataFrame({"st": st.flatten(), "st_direction": df["st_direction"]}, index=df.index)
 
 
@@ -56,5 +56,5 @@ class VolumeWeightedAveragePrice(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         percentage_distance = (df["close"] - df["vwap"]) / df["close"]
-        vwap = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1))
+        vwap = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1)).clip(-5, 5)
         return pd.DataFrame({"vwap": vwap.flatten()}, index=df.index)

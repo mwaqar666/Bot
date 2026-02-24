@@ -26,5 +26,5 @@ class Entropy(Indicator):
         self.__min_max_scaler.fit(df[["entropy"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        entropy = self.__min_max_scaler.transform(df[["entropy"]])
+        entropy = self.__min_max_scaler.transform(df[["entropy"]]).clip(-5, 5)
         return pd.DataFrame({"entropy": entropy.flatten()}, index=df.index)

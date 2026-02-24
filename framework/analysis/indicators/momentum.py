@@ -32,7 +32,7 @@ class MovingAverageConvergenceDivergence(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = ["macd", "macd_hist"]
-        macd = self.__robust_scaler.transform(df[cols])
+        macd = self.__robust_scaler.transform(df[cols]).clip(-5, 5)
 
         return pd.DataFrame(macd, columns=cols, index=df.index)
 
@@ -57,7 +57,7 @@ class RelativeStrengthIndex(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         rsi = self.__min_max_scaler.transform(df[["rsi"]])
-        return pd.DataFrame({"rsi": rsi.flatten()}, index=df.index)
+        return pd.DataFrame({"rsi": rsi.flatten().clip(-5, 5)}, index=df.index)
 
 
 # -----------------
@@ -86,7 +86,7 @@ class TTMSqueeze(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = ["sqz", "sqz_on"]
-        sqz = self.__robust_scaler.transform(df[cols])
+        sqz = self.__robust_scaler.transform(df[cols]).clip(-5, 5)
 
         return pd.DataFrame(sqz, columns=cols, index=df.index)
 
@@ -116,7 +116,7 @@ class PercentageVolumeOscillator(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cols = ["pvo", "pvo_hist"]
-        pvo = self.__robust_scaler.transform(df[cols])
+        pvo = self.__robust_scaler.transform(df[cols]).clip(-5, 5)
 
         return pd.DataFrame(pvo, columns=cols, index=df.index)
 
@@ -137,7 +137,7 @@ class BalanceOfPower(Indicator):
         pass
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        return pd.DataFrame({"bop": df["bop"]}, index=df.index)
+        return pd.DataFrame({"bop": df["bop"].clip(-5, 5)}, index=df.index)
 
 
 # -----------------
@@ -159,5 +159,5 @@ class WilliamsR(Indicator):
         self.__robust_scaler.fit(df[["willr"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        willr = self.__robust_scaler.transform(df[["willr"]])
+        willr = self.__robust_scaler.transform(df[["willr"]]).clip(-5, 5)
         return pd.DataFrame({"willr": willr.flatten()}, index=df.index)

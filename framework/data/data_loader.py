@@ -47,18 +47,19 @@ class DataLoader:
 
         return df
 
-    def load_data_from_disk(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME) -> Optional[pd.DataFrame]:
+    def load_data_from_disk(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, suffix: str = "") -> Optional[pd.DataFrame]:
         """
         Loads historical data from a local CSV file.
 
         Args:
             symbol (str): The trading pair symbol (e.g., 'BTC/USDT').
             timeframe (str): The timeframe for the candles (e.g., '15m').
+            suffix (str): Suffix to append to the filename.
 
         Returns:
             Optional[pd.DataFrame]: The loaded DataFrame or None if not found.
         """
-        filename = self.__get_file_path(symbol, timeframe)
+        filename = self.__get_file_path(symbol, timeframe, suffix)
         if not os.path.exists(filename):
             print(f"  [WARN] File not found: {filename}")
             return None

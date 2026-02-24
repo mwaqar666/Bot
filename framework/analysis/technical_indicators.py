@@ -7,13 +7,14 @@ from framework.analysis.indicators.cycles import EvenBetterSineWave
 from framework.analysis.indicators.momentum import MovingAverageConvergenceDivergence, RelativeStrengthIndex, TTMSqueeze, PercentageVolumeOscillator, BalanceOfPower, WilliamsR
 from framework.analysis.indicators.overlap import SuperTrend, VolumeWeightedAveragePrice
 from framework.analysis.indicators.performance import DrawDown, LogReturn
-from framework.analysis.indicators.statistics import Entropy
 from framework.analysis.indicators.trend import AverageDirectionalIndex, AroonOscillator, ChoppinessIndex, ParabolicStopAndReverse, Vortex
-from framework.analysis.indicators.volatility import NormalizedAverageTrueRange, BollingerBands, UlcerIndex
+from framework.analysis.indicators.volatility import AverageTrueRange, NormalizedAverageTrueRange, BollingerBands, UlcerIndex
 from framework.analysis.indicators.volume import ChaikinMoneyFlow, ElderForceIndex, MoneyFlowIndex, OnBalanceVolume
 
 
 class TechnicalIndicators:
+    __ohlcv_columns: list[str] = ["open", "high", "low", "close", "volume"]
+
     def __init__(self) -> None:
         self.__indicators: list[Indicator] = [
             IntraDayCandle(),
@@ -28,12 +29,13 @@ class TechnicalIndicators:
             VolumeWeightedAveragePrice(),
             DrawDown(),
             LogReturn(),
-            Entropy(),
+            # Entropy(),
             AverageDirectionalIndex(),
             AroonOscillator(),
             ChoppinessIndex(),
             ParabolicStopAndReverse(),
             Vortex(),
+            AverageTrueRange(),
             NormalizedAverageTrueRange(),
             BollingerBands(),
             UlcerIndex(),
@@ -56,10 +58,10 @@ class TechnicalIndicators:
             futures = [executor.submit(indicator.calculate, df) for indicator in self.__indicators]
             results = [f.result() for f in futures]
 
-        df = pd.concat([df] + results, axis=1)
-        df.dropna(inplace=True)
+        results = pd.concat([df[self.__ohlcv_columns]] + results, axis=1)
+        results.dropna(inplace=True)
 
-        return df
+        return results
 
     def fit_scalers(self, df: pd.DataFrame) -> None:
         """
@@ -86,7 +88,7 @@ class TechnicalIndicators:
             futures = [executor.submit(indicator.normalize, df) for indicator in self.__indicators]
             results = [f.result() for f in futures]
 
-        results = pd.concat(results, axis=1).clip(lower=-3, upper=3)
+        results = pd.concat([df[self.__ohlcv_columns]] + results, axis=1)
         results.dropna(inplace=True)
 
         return results

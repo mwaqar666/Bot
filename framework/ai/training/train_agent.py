@@ -1,112 +1,183 @@
-from framework.analysis.technical_indicators import TechnicalIndicators
-import os
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.callbacks import BaseCallback
 
-from framework.ai.training.trading_env import CryptoTradingEnv
-from framework.ai.models.transformer_feature_extractor import TransformerFeatureExtractor
+from framework.ai.training.trading_env import TradingEnvironment
+from framework.ai.models.tcn_feature_extractor import TCNFeatureExtractor
 
 # --- Configuration ---
-DATA_PATH = "framework/data/BTC_USDT_5m_raw.csv"
+MODEL_PATH = "framework/ai/models/ppo_tcn_v1"
+LOG_DIR = "framework/ai/logs"
 
+SYMBOL = "BTC/USDT"
+INITIAL_BALANCE = 1000.0
+RISK_PER_TRADE = 0.01  # Risk 1% of balance per trade
+FEE_PERCENT = 0.001  # 0.1% maker/taker fee
+SLIPPAGE_PERCENT = 0.0005  # 0.05% slippage
+SL_MULTIPLIER = 2.0  # Stop Loss: 2x ATR
+TP_MULTIPLIER = 4.0  # Take Profit: 4x ATR (2:1 Risk/Reward)
 WINDOW_SIZE = 60  # Look back 60 candles (5 hours)
 TOTAL_TIMESTEPS = 1_000_000
-
-# Raw Features to process
-RAW_FEATURES = ["close", "volume", "rsi", "macd", "macd_signal", "macd_hist", "bb_upper", "bb_lower", "atr", "adx", "stochrsi_k", "stochrsi_d"]
 
 
 class TensorboardCallback(BaseCallback):
     """
-    Custom callback for plotting additional values in tensorboard.
+    Custom callback for logging metrics to TensorBoard.
+    Uses _on_rollout_end to log AVERAGES across the full 2048-step window,
+    not just the last step (which is misleading when model HOLDs at the end).
     """
 
     def __init__(self, verbose=0):
         super(TensorboardCallback, self).__init__(verbose)
+        self._rewards = []
+        self._pnls = []
 
     def _on_step(self) -> bool:
         if self.locals.get("infos"):
             info = self.locals["infos"][0]
-            self.logger.record("custom/net_worth", info.get("net_worth"))
-            self.logger.record("custom/position", info.get("pos"))
+            self._rewards.append(info.get("reward", 0.0))
+            self._pnls.append(info.get("trade_pnl", 0.0))
+
+            # Balance is cumulative — last value is correct
+            self.logger.record("custom/balance", info.get("balance", 0.0))
+            self.logger.record("custom/net_worth", info.get("net_worth", 0.0))
         return True
 
+    def _on_rollout_end(self) -> None:
+        """Called once per 2048-step rollout. Log aggregates here."""
+        if not self._rewards:
+            return
 
-def make_env(df, features, rank, seed=0):
-    def callback() -> CryptoTradingEnv:
-        env = CryptoTradingEnv(
-            df=df,
-            features=features,
-            window_size=WINDOW_SIZE,
-            initial_balance=1000.0,
-        )
-        env.reset(seed=seed + rank)
-        return env
+        n_trades = sum(1 for p in self._pnls if p != 0.0)
+        n_holds = sum(1 for p in self._pnls if p == 0.0)
 
-    return callback
+        self.logger.record("custom/avg_reward", sum(self._rewards) / len(self._rewards))
+        self.logger.record("custom/avg_trade_pnl", sum(self._pnls) / len(self._pnls))
+        self.logger.record("custom/n_trades", n_trades)
+        self.logger.record("custom/hold_rate_%", n_holds / len(self._pnls) * 100)
+
+        self._rewards.clear()
+        self._pnls.clear()
 
 
-def train():
-    print("--- Starting AI Training Session ---")
+def train(train_df: pd.DataFrame, features: list[str]) -> None:
+    print(f"Training on {len(features)} Features: {features}")
 
-    # 1. Load Data
-    if not os.path.exists(DATA_PATH):
-        raise FileNotFoundError(f"Data file not found: {DATA_PATH}")
+    # 1. Create Environment (Training on Train Set)
+    env = DummyVecEnv(
+        [
+            lambda: TradingEnvironment(
+                df=train_df,
+                window_size=WINDOW_SIZE,
+                features=features,
+                initial_balance=INITIAL_BALANCE,
+                risk_per_trade=RISK_PER_TRADE,
+                fee_percent=FEE_PERCENT,
+                slippage_percent=SLIPPAGE_PERCENT,
+                sl_multiplier=SL_MULTIPLIER,
+                tp_multiplier=TP_MULTIPLIER,
+                symbol=SYMBOL,
+            )
+        ]
+    )
 
-    print(f"Loading data from {DATA_PATH}...")
-    df = pd.read_csv(DATA_PATH)
-
-    # 2. Split Data using sklearn (70% Train, 15% Val, 15% Test)
-    # Important: shuffle=False to preserve time-series order
-    print("Splitting data into Train (70%), Validation (15%), and Test (15%)...")
-
-    # First split: 70% Train, 30% Temp (Val + Test)
-    train_df, temp_df = train_test_split(df, test_size=0.3, shuffle=False)
-
-    # Second split: Split the 30% Temp into 50% Val (15% total) and 50% Test (15% total)
-    val_df, test_df = train_test_split(temp_df, test_size=0.5, shuffle=False)
-
-    # Reset indices to ensure environment works correctly
-    train_df = train_df.reset_index(drop=True)
-    val_df = val_df.reset_index(drop=True)
-    test_df = test_df.reset_index(drop=True)
-
-    ti = TechnicalIndicators()
-
-    ti.fit_scalers(train_df)
-
-    train_df = ti.normalize(train_df)
-    val_df = ti.normalize(val_df)
-    test_df = ti.normalize(test_df)
-
-    # 3. Create Environment (Training on Train Set)
-    env = DummyVecEnv([make_env(train_df, train_df.columns, i) for i in range(1)])
-
-    # 4. Initialize PPO
+    # 2. Initialize PPO
     print("Initializing PPO Agent...")
 
     policy_kwargs = dict(
-        features_extractor_class=TransformerFeatureExtractor,
+        features_extractor_class=TCNFeatureExtractor,
         features_extractor_kwargs=dict(features_dim=128),
+        net_arch=dict(pi=[64, 64], vf=[64, 64]),
     )
 
-    model = PPO("MlpPolicy", env, verbose=1, policy_kwargs=policy_kwargs, learning_rate=3e-4, n_steps=2048, batch_size=64, gamma=0.99, gae_lambda=0.95, tensorboard_log=LOG_DIR, device="auto")
+    model = PPO(
+        "MlpPolicy",
+        env,
+        learning_rate=1e-4,  # Reduced from 3e-4 to stabilize high approx_kl
+        n_steps=2048,
+        batch_size=64,
+        n_epochs=10,
+        gamma=0.99,  # Discount factor — rewards agent for long-term profit
+        ent_coef=0.01,  # Entropy bonus — mathematically prevents HOLD collapse
+        verbose=1,
+        policy_kwargs=policy_kwargs,
+        tensorboard_log=LOG_DIR,
+    )
 
-    # 5. Train
+    # 3. Train
     print(f"Training for {TOTAL_TIMESTEPS} steps...")
     try:
         model.learn(total_timesteps=TOTAL_TIMESTEPS, callback=TensorboardCallback())
     except KeyboardInterrupt:
         print("Training interrupted manually. Saving current model...")
 
-    # 6. Save
-    print(f"Saving model to {MODEL_SAVE_PATH}...")
-    model.save(MODEL_SAVE_PATH)
-    print("Done. (Note: Validation and Test simulation should be run separately using the saved model)")
+    # 4. Save
+    print(f"Saving model to {MODEL_PATH}...")
+    model.save(MODEL_PATH)
+    print("Training complete.")
 
 
-if __name__ == "__main__":
-    train()
+def evaluate(df: pd.DataFrame, features: list[str], label: str = "Validation") -> dict:
+    """
+    Run the trained model on a dataset (val or test) and collect performance metrics.
+    The model runs in deterministic mode (no exploration), so results are reproducible.
+
+    Args:
+        df (pd.DataFrame): The dataset to evaluate on (val_df or test_df).
+        features (list[str]): List of feature column names fed to the model.
+        label (str): Label for printing purposes (e.g. "Validation" or "Test").
+
+    Returns:
+        dict: A dictionary of performance metrics.
+    """
+    print(f"\n--- Evaluating on {label} Set ---")
+
+    env = TradingEnvironment(
+        df=df,
+        window_size=WINDOW_SIZE,
+        features=features,
+        initial_balance=INITIAL_BALANCE,
+        risk_per_trade=RISK_PER_TRADE,
+        fee_percent=FEE_PERCENT,
+        slippage_percent=SLIPPAGE_PERCENT,
+        sl_multiplier=SL_MULTIPLIER,
+        tp_multiplier=TP_MULTIPLIER,
+        symbol=SYMBOL,
+    )
+
+    model = PPO.load(MODEL_PATH, env=env)
+    obs, _ = env.reset()
+    done = False
+
+    while not done:
+        # deterministic=True: picks the highest-probability action, no random sampling
+        action, _ = model.predict(obs, deterministic=True)
+        obs, _, terminated, truncated, _ = env.step(action)
+        done = terminated or truncated
+
+    # Collect metrics from trade history
+    trades = env.trade_history
+    wins = [t for t in trades if t > 0]
+    losses = [t for t in trades if t <= 0]
+
+    metrics = {
+        "final_balance": env.balance,
+        "total_return_%": (env.balance - INITIAL_BALANCE) / INITIAL_BALANCE * 100,
+        "total_trades": len(trades),
+        "win_rate_%": len(wins) / len(trades) * 100 if trades else 0.0,
+        "avg_win_%": sum(wins) / len(wins) * 100 if wins else 0.0,
+        "avg_loss_%": sum(losses) / len(losses) * 100 if losses else 0.0,
+        "avg_trade_pnl_%": sum(trades) / len(trades) * 100 if trades else 0.0,
+    }
+
+    print(f"  Final Balance : ${metrics['final_balance']:.2f}  (Started: ${INITIAL_BALANCE:.2f})")
+    print(f"  Total Return  : {metrics['total_return_%']:+.2f}%")
+    print(f"  Total Trades  : {metrics['total_trades']}")
+    print(f"  Win Rate      : {metrics['win_rate_%']:.1f}%")
+    print(f"  Avg Win       : {metrics['avg_win_%']:+.3f}%")
+    print(f"  Avg Loss      : {metrics['avg_loss_%']:+.3f}%")
+    print(f"  Avg Trade PnL : {metrics['avg_trade_pnl_%']:+.3f}%")
+    print("-----------------------------------")
+
+    return metrics
