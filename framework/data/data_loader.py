@@ -1,5 +1,5 @@
-import time
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from datetime import datetime, timedelta
 
@@ -94,69 +94,63 @@ class DataLoader:
         return filename
 
     def __calculate_time_range(self, days: int) -> tuple[datetime, datetime]:
-        """
-        Calculates start and end times based on days.
-
-        Args:
-            days (int): Number of days to look back.
-
-        Returns:
-            Tuple[datetime, datetime]: (start_time, end_time)
-        """
         end_time = datetime.now()
         start_time = end_time - timedelta(days=days)
         return start_time, end_time
 
     def __fetch_candles(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime) -> list[list]:
-        """
-        Fetches candles from the exchange in a loop.
+        '''
+        Downloads OHLCV candles in parallel chunks for the given time range.
 
         Args:
-            symbol (str): The symbol to fetch.
-            timeframe (str): The period of each candle.
-            start_time (datetime): The starting time.
-            end_time (datetime): The ending time.
+            symbol (str): The trading pair symbol.
+            timeframe (str): The candle timeframe string.
+            start_time (datetime): The inclusive start of the range.
+            end_time (datetime): The exclusive end of the range.
 
         Returns:
-            List[list]: A list of raw OHLCV data.
-        """
+            list[list]: A sorted, deduplicated list of OHLCV candles.
+        '''
         since = int(start_time.timestamp() * 1000)
         end_timestamp = int(end_time.timestamp() * 1000)
-        all_candles = []
+        tf_ms = self.__exchange.parse_timeframe(timeframe) * 1000  # timeframe duration in ms
+        chunk_ms = tf_ms * 1000  # ms covered by 1000 candles (max per request)
 
-        print(f"Fetching {symbol} ({timeframe}) from {start_time.date()}...")
+        chunk_starts = list(range(since, end_timestamp, chunk_ms))
+        print(f"Fetching {symbol} ({timeframe}) from {start_time.date()} across {len(chunk_starts)} chunks...")
 
-        while since < end_timestamp:
-            try:
-                candles = self.__exchange.fetch_ohlcv(symbol, timeframe, since, limit=1000)
-                if not candles:
-                    break
+        raw: list[list] = []
+        with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+            fetch = lambda s: self.__fetch_chunk(symbol, timeframe, s)
+            for chunk in executor.map(fetch, chunk_starts):
+                raw.extend(chunk)
 
-                all_candles.extend(candles)
-                since = candles[-1][0] + 1
+        unique = {candle[0]: candle for candle in raw}
+        return [unique[k] for k in sorted(unique) if k <= end_timestamp]
 
-                # Progress logging
-                dt = datetime.fromtimestamp(candles[-1][0] / 1000)
-                print(f"  > Downloaded to: {dt}")
-
-                time.sleep(0.5)  # Respecting rate limits/user preference
-
-            except Exception as e:
-                print(f"  Error fetching data: {e}")
-                break
-
-        return all_candles
-
-    def __convert_to_dataframe(self, candles: list[list]) -> pd.DataFrame:
-        """
-        Converts raw candles to a DataFrame.
+    def __fetch_chunk(self, symbol: str, timeframe: str, since: int) -> list[list]:
+        '''
+        Fetches a single page of OHLCV candles starting from the given timestamp.
 
         Args:
-            candles (List[list]): The raw candle data.
+            symbol (str): The trading pair symbol.
+            timeframe (str): The candle timeframe string.
+            since (int): The chunk start timestamp in milliseconds.
 
         Returns:
-            pd.DataFrame: A formatted pandas DataFrame.
-        """
+            list[list]: A list of OHLCV candles, or an empty list on error.
+        '''
+        try:
+            candles = self.__exchange.fetch_ohlcv(symbol, timeframe, since, limit=1000)
+            if candles:
+                dt = datetime.fromtimestamp(candles[-1][0] / 1000)
+                print(f"  > Downloaded to: {dt}")
+            return candles or []
+        except Exception as e:
+            print(f"  Error fetching chunk at {since}: {e}")
+            return []
+
+    def __convert_to_dataframe(self, candles: list[list]) -> pd.DataFrame:
         df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
         df.set_index("timestamp", inplace=True)
@@ -164,16 +158,5 @@ class DataLoader:
         return df
 
     def __get_file_path(self, symbol: str, timeframe: str, suffix: str = "") -> str:
-        """
-        Constructs the standard file path for data.
-
-        Args:
-            symbol (str): The trading pair symbol.
-            timeframe (str): The timeframe string.
-            suffix (str): Suffix to append to the filename.
-
-        Returns:
-            str: Relative path to the CSV file.
-        """
         safe_symbol = symbol.replace("/", "_").replace(":", "_")
         return f"framework/data/{safe_symbol}_{timeframe}{suffix}.csv"

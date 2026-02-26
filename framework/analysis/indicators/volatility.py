@@ -11,9 +11,6 @@ from sklearn.preprocessing import RobustScaler
 # 1. Average True Range
 # -----------------
 class AverageTrueRange(Indicator):
-    # def __init__(self) -> None:
-    # self.__robust_scaler = RobustScaler()
-
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         atr = ta.atr(df["high"], df["low"], df["close"], length=config.ATR)
 
@@ -23,8 +20,6 @@ class AverageTrueRange(Indicator):
         return pd.DataFrame({"atr": atr}, index=df.index)
 
     def fit_scaler(self, df: pd.DataFrame) -> None:
-        # norm_atr = df["atr"] / df["close"]
-        # self.__robust_scaler.fit(norm_atr.values.reshape(-1, 1))
         pass
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:

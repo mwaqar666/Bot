@@ -6,7 +6,6 @@ from framework.analysis.indicators.candles import IntraDayCandle
 from framework.analysis.indicators.cycles import EvenBetterSineWave
 from framework.analysis.indicators.momentum import MovingAverageConvergenceDivergence, RelativeStrengthIndex, TTMSqueeze
 from framework.analysis.indicators.overlap import VolumeWeightedAveragePrice
-from framework.analysis.indicators.performance import LogReturn
 from framework.analysis.indicators.trend import AverageDirectionalIndex, AroonOscillator
 from framework.analysis.indicators.volatility import AverageTrueRange, NormalizedAverageTrueRange, BollingerBands
 from framework.analysis.indicators.volume import ChaikinMoneyFlow, OnBalanceVolume
@@ -23,7 +22,6 @@ class TechnicalIndicators:
             RelativeStrengthIndex(),
             TTMSqueeze(),
             VolumeWeightedAveragePrice(),
-            LogReturn(),
             AverageDirectionalIndex(),
             AroonOscillator(),
             AverageTrueRange(),

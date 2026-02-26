@@ -3,7 +3,7 @@ from wandb import init as wandb_init, Run
 from wandb.integration.sb3 import WandbCallback
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv
-from stable_baselines3.common.callbacks import CallbackList
+from stable_baselines3.common.callbacks import CallbackList, BaseCallback
 
 import config
 
@@ -11,26 +11,63 @@ from framework.ai.training.trading_env import TradingEnvironment
 from framework.ai.models.tcn_feature_extractor import TCNFeatureExtractor
 
 
+class TradeMetricsCallback(BaseCallback):
+    """
+    Logs custom trading metrics from the environment's info dict into
+    the SB3 logger (stdout table + W&B) on every rollout.
+    """
+
+    def _on_step(self) -> bool:
+        for info in self.locals.get("infos", []):
+            self.logger.record("trade/net_worth", info.get("net_worth", 0))
+            self.logger.record("trade/balance", info.get("balance", 0))
+            self.logger.record("trade/trade_pnl", info.get("trade_pnl", 0))
+            self.logger.record("trade/reward", info.get("reward", 0))
+            self.logger.record("trade/action", info.get("action", 0))
+        return True
+
+
 class ModelTrainer:
-    def __init__(self) -> None:
-        self.symbol = config.SYMBOL
-        self.initial_balance = 10_000
-        self.risk_per_trade = 0.01  # Risk 1% of balance per trade
-        self.fee_percent = 0.001  # 0.1% maker/taker fee
-        self.slippage_percent = 0.0005  # 0.05% slippage
-        self.sl_multiplier = 1.0  # Stop Loss: 1x ATR
-        self.tp_multiplier = 2.0  # Take Profit: 2x ATR (2:1 Risk/Reward)
-        self.window_size = 60  # Look back 60 candles (5 hours)
-        self.total_timesteps = 1_000_000
+    def __init__(
+        self,
+        features: list[str],
+        symbol: str = config.SYMBOL,
+        initial_balance: float = 10_000,
+        risk_per_trade: float = 0.01,
+        fee_percent: float = 0.001,
+        slippage_percent: float = 0.0005,
+        sl_multiplier: float = 1.0,
+        tp_multiplier: float = 2.0,
+        window_size: int = 60,
+        total_timesteps: int = 5_000_000,
+    ) -> None:
+        self.features = features
+        self.symbol = symbol
+        self.initial_balance = initial_balance
+        self.risk_per_trade = risk_per_trade
+        self.fee_percent = fee_percent
+        self.slippage_percent = slippage_percent
+        self.sl_multiplier = sl_multiplier
+        self.tp_multiplier = tp_multiplier
+        self.window_size = window_size
+        self.total_timesteps = total_timesteps
+
+        self.learning_rate = 3e-4
+        self.n_steps = 2048
+        self.batch_size = 64
+        self.n_epochs = 10
+        self.gamma = 0.99
+        self.gae_lambda = 0.95
+        self.ent_coef = 0.01
 
         self.model_path = "framework/ai/models/ppo_tcn_v1"
         self.wandb_project = "trading-bot"  # Name of your project on wandb.ai
 
-    def train(self, train_df: pd.DataFrame, features: list[str]) -> None:
-        print(f"Training on {len(features)} Features: {features}")
+    def train(self, train_df: pd.DataFrame) -> None:
+        print(f"Training on {len(self.features)} Features: {self.features}")
 
         # 1. Create Environment (Training on Train Set)
-        env = self.__create_vector_environment_callback(train_df, features)
+        env = self.__create_vector_environment_callback(train_df)
 
         # 2. Initialize PPO
         print("Initializing PPO Agent...")
@@ -38,14 +75,12 @@ class ModelTrainer:
         model = self.__create_model(env)
 
         # 3. Initialize W&B run
-        run, callback = self.__initialize_weights_and_biases(features)
-
-        callbacks = CallbackList([callback])
+        run, callback_list = self.__initialize_monitoring_and_logging()
 
         # 4. Train
         print(f"Training for {self.total_timesteps} steps...")
         try:
-            model.learn(total_timesteps=self.total_timesteps, callback=callbacks)
+            model.learn(total_timesteps=self.total_timesteps, callback=callback_list)
         except KeyboardInterrupt:
             print("Training interrupted manually. Saving current model...")
         finally:
@@ -56,7 +91,7 @@ class ModelTrainer:
         model.save(self.model_path)
         print("Training complete.")
 
-    def evaluate(self, df: pd.DataFrame, features: list[str], label: str = "Validation") -> dict:
+    def evaluate(self, df: pd.DataFrame, label: str = "Validation") -> dict:
         """
         Run the trained model on a dataset (val or test) and collect performance metrics.
         The model runs in deterministic mode (no exploration), so results are reproducible.
@@ -71,7 +106,7 @@ class ModelTrainer:
         """
         print(f"\n--- Evaluating on {label} Set ---")
 
-        env = self.__create_environment(df, features)
+        env = self.__create_environment(df)
 
         model = PPO.load(self.model_path, env=env)
         obs, _ = env.reset()
@@ -109,15 +144,15 @@ class ModelTrainer:
 
         return metrics
 
-    def __create_vector_environment_callback(self, df: pd.DataFrame, features: list[str]) -> DummyVecEnv:
-        return DummyVecEnv([lambda: self.__create_environment(df, features)])
+    def __create_vector_environment_callback(self, df: pd.DataFrame) -> DummyVecEnv:
+        return DummyVecEnv([lambda: self.__create_environment(df)])
 
-    def __create_environment(self, df: pd.DataFrame, features: list[str]) -> TradingEnvironment:
+    def __create_environment(self, df: pd.DataFrame) -> TradingEnvironment:
         return TradingEnvironment(
             df=df,
             symbol=self.symbol,
             window_size=self.window_size,
-            features=features,
+            features=self.features,
             initial_balance=self.initial_balance,
             risk_per_trade=self.risk_per_trade,
             fee_percent=self.fee_percent,
@@ -136,36 +171,42 @@ class ModelTrainer:
         return PPO(
             "MlpPolicy",
             environment,
-            learning_rate=3e-4,
-            n_steps=2048,
-            batch_size=64,
-            n_epochs=10,
-            gamma=0.99,
-            gae_lambda=0.95,
-            ent_coef=0.01,
+            learning_rate=self.learning_rate,
+            n_steps=self.n_steps,
+            batch_size=self.batch_size,
+            n_epochs=self.n_epochs,
+            gamma=self.gamma,
+            gae_lambda=self.gae_lambda,
+            ent_coef=self.ent_coef,
             verbose=1,
             policy_kwargs=policy_kwargs,
         )
 
-    def __initialize_weights_and_biases(self, features: list[str]) -> tuple[Run, WandbCallback]:
+    def __initialize_monitoring_and_logging(self) -> tuple[Run, CallbackList]:
         run = wandb_init(
             project=self.wandb_project,
             config={
-                "learning_rate": 1e-4,
-                "n_steps": 2048,
-                "batch_size": 64,
-                "n_epochs": 10,
-                "gamma": 0.99,
-                "ent_coef": 0.01,
+                "learning_rate": self.learning_rate,
+                "n_steps": self.n_steps,
+                "batch_size": self.batch_size,
+                "n_epochs": self.n_epochs,
+                "gamma": self.gamma,
+                "gae_lambda": self.gae_lambda,
+                "ent_coef": self.ent_coef,
                 "sl_multiplier": self.sl_multiplier,
                 "tp_multiplier": self.tp_multiplier,
                 "window_size": self.window_size,
-                "n_features": len(features),
+                "n_features": len(self.features),
             },
             sync_tensorboard=False,
             save_code=True,
         )
 
-        callbacks = WandbCallback(gradient_save_freq=500, verbose=2)
+        callbacks = CallbackList(
+            [
+                TradeMetricsCallback(),
+                WandbCallback(gradient_save_freq=500, verbose=2),
+            ]
+        )
 
         return run, callbacks

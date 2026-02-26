@@ -27,14 +27,12 @@ class MovingAverageConvergenceDivergence(Indicator):
         return pd.DataFrame({"macd": macd, "macd_signal": macd_signal, "macd_hist": macd_hist}, index=df.index)
 
     def fit_scaler(self, df: pd.DataFrame) -> None:
-        cols = ["macd", "macd_hist"]
-        self.__robust_scaler.fit(df[cols])
+        self.__robust_scaler.fit(df[["macd"]])
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cols = ["macd", "macd_hist"]
-        macd = self.__robust_scaler.transform(df[cols]).clip(-5, 5)
+        macd = self.__robust_scaler.transform(df[["macd"]]).clip(-5, 5)
 
-        return pd.DataFrame(macd, columns=cols, index=df.index)
+        return pd.DataFrame({"macd": macd.flatten()}, index=df.index)
 
 
 # -----------------

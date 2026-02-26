@@ -41,9 +41,6 @@ class AverageDirectionalIndex(Indicator):
 # 2. Aroon Oscillator
 # -----------------
 class AroonOscillator(Indicator):
-    def __init__(self) -> None:
-        self.__min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
-
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         aroon_data = ta.aroon(df["high"], df["low"], length=config.AROON_LENGTH, scalar=config.AROON_SCALAR)
 
@@ -57,11 +54,10 @@ class AroonOscillator(Indicator):
         return pd.DataFrame({"aroon_up": aroon_up, "aroon_down": aroon_down, "aroon": aroon}, index=df.index)
 
     def fit_scaler(self, df: pd.DataFrame) -> None:
-        self.__min_max_scaler.fit(df[["aroon"]])
+        pass
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        aroon = self.__min_max_scaler.transform(df[["aroon"]]).clip(-5, 5)
-        return pd.DataFrame({"aroon": aroon.flatten()}, index=df.index)
+        return pd.DataFrame({}, index=df.index)
 
 
 # -----------------
