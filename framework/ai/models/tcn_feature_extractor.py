@@ -22,19 +22,19 @@ class TCNFeatureExtractor(BaseFeaturesExtractor):
 
         self.tcn = nn.Sequential(
             # Layer 1: Dilation 1 (Sees 3 candles)
-            nn.Conv1d(input_channels, 64, kernel_size=3, padding=1, dilation=1),
+            nn.Conv1d(input_channels, 32, kernel_size=3, padding=1, dilation=1),
             nn.LeakyReLU(0.1),
             # Layer 2: Dilation 2 (Sees 7 candles)
-            nn.Conv1d(64, 128, kernel_size=3, padding=2, dilation=2),
+            nn.Conv1d(32, 64, kernel_size=3, padding=2, dilation=2),
             nn.LeakyReLU(0.1),
             # Layer 3: Dilation 4 (Sees 15 candles)
-            nn.Conv1d(128, 128, kernel_size=3, padding=4, dilation=4),
+            nn.Conv1d(64, 64, kernel_size=3, padding=4, dilation=4),
             nn.LeakyReLU(0.1),
             # Layer 4: Dilation 8 (Sees 31 candles)
-            nn.Conv1d(128, 64, kernel_size=3, padding=8, dilation=8),
+            nn.Conv1d(64, 32, kernel_size=3, padding=8, dilation=8),
             nn.LeakyReLU(0.1),
             # Layer 5: Dilation 16 (Sees 63 candles)
-            nn.Conv1d(64, 32, kernel_size=3, padding=16, dilation=16),
+            nn.Conv1d(32, 16, kernel_size=3, padding=16, dilation=16),
             nn.LeakyReLU(0.1),
             nn.Flatten(),
         )

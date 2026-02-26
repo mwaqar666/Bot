@@ -120,10 +120,13 @@ class TradingEnvironment(gym.Env):
 
             if side == PositionSide.LONG:
                 # Check Stop Loss first (conservative)
-                if low_price <= sl_price:
+                if high_price >= tp_price and low_price <= sl_price:
                     final_exit_price = sl_price
-                elif high_price >= tp_price:
-                    final_exit_price = tp_price
+                else:
+                    if low_price <= sl_price:
+                        final_exit_price = sl_price
+                    elif high_price >= tp_price:
+                        final_exit_price = tp_price
 
                 # Apply slippage on exit
                 exit_price_with_slippage = final_exit_price * (1 - self.slippage_percent)
@@ -132,10 +135,13 @@ class TradingEnvironment(gym.Env):
                 trade_pnl_pct = (exit_price_with_slippage - entry_price) / entry_price
 
             else:  # SHORT
-                if high_price >= sl_price:
+                if high_price >= sl_price and low_price <= tp_price:
                     final_exit_price = sl_price
-                elif low_price <= tp_price:
-                    final_exit_price = tp_price
+                else:
+                    if high_price >= sl_price:
+                        final_exit_price = sl_price
+                    elif low_price <= tp_price:
+                        final_exit_price = tp_price
 
                 # Apply slippage on exit
                 exit_price_with_slippage = final_exit_price * (1 + self.slippage_percent)

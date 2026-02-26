@@ -4,12 +4,12 @@ from concurrent.futures import ProcessPoolExecutor
 from framework.analysis.indicators.base import Indicator
 from framework.analysis.indicators.candles import IntraDayCandle
 from framework.analysis.indicators.cycles import EvenBetterSineWave
-from framework.analysis.indicators.momentum import MovingAverageConvergenceDivergence, RelativeStrengthIndex, TTMSqueeze, PercentageVolumeOscillator, BalanceOfPower, WilliamsR
-from framework.analysis.indicators.overlap import SuperTrend, VolumeWeightedAveragePrice
-from framework.analysis.indicators.performance import DrawDown, LogReturn
-from framework.analysis.indicators.trend import AverageDirectionalIndex, AroonOscillator, ChoppinessIndex, ParabolicStopAndReverse, Vortex
-from framework.analysis.indicators.volatility import AverageTrueRange, NormalizedAverageTrueRange, BollingerBands, UlcerIndex
-from framework.analysis.indicators.volume import ChaikinMoneyFlow, ElderForceIndex, MoneyFlowIndex, OnBalanceVolume
+from framework.analysis.indicators.momentum import MovingAverageConvergenceDivergence, RelativeStrengthIndex, TTMSqueeze
+from framework.analysis.indicators.overlap import VolumeWeightedAveragePrice
+from framework.analysis.indicators.performance import LogReturn
+from framework.analysis.indicators.trend import AverageDirectionalIndex, AroonOscillator
+from framework.analysis.indicators.volatility import AverageTrueRange, NormalizedAverageTrueRange, BollingerBands
+from framework.analysis.indicators.volume import ChaikinMoneyFlow, OnBalanceVolume
 
 
 class TechnicalIndicators:
@@ -22,26 +22,14 @@ class TechnicalIndicators:
             MovingAverageConvergenceDivergence(),
             RelativeStrengthIndex(),
             TTMSqueeze(),
-            PercentageVolumeOscillator(),
-            BalanceOfPower(),
-            WilliamsR(),
-            SuperTrend(),
             VolumeWeightedAveragePrice(),
-            DrawDown(),
             LogReturn(),
-            # Entropy(),
             AverageDirectionalIndex(),
             AroonOscillator(),
-            ChoppinessIndex(),
-            ParabolicStopAndReverse(),
-            Vortex(),
             AverageTrueRange(),
             NormalizedAverageTrueRange(),
             BollingerBands(),
-            UlcerIndex(),
             ChaikinMoneyFlow(),
-            ElderForceIndex(),
-            MoneyFlowIndex(),
             OnBalanceVolume(),
         ]
 
