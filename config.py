@@ -14,7 +14,7 @@ IS_TESTNET = True  # Set to False for real money
 
 # --- Trading Parameters ---
 SYMBOL = "BTC/USDT"  # The pair we are trading
-TIMEFRAME = "5m"  # Candle timeframe
+TIMEFRAME = "1h"  # Candle timeframe
 MAX_LEVERAGE = 50  # Maximum allowable leverage (safety cap)
 RISK_PER_TRADE = 0.01  # Risk 1% of account balance per trade
 DATA_LOOKBACK_DAYS = 5  # Number of days of data to look back
@@ -52,6 +52,10 @@ WILLR_LENGTH = 14
 SUPER_TREND_LENGTH = 7
 SUPER_TREND_MULTIPLIER = 3.0
 
+# --- EMA Parameters ---
+EMA_FAST_LENGTH = 14
+EMA_SLOW_LENGTH = 28
+
 # --- Log Return Parameters ---
 LOG_RETURN_LENGTH = 20
 
@@ -81,10 +85,10 @@ PSAR_MAX_ACC = 0.2
 VORTEX_LENGTH = 14
 
 # --- Average True Range Parameters ---
-ATR = 14
+ATR_LENGTH = 14
 
 # --- Bollinger Bands Parameters ---
-BBANDS = 20
+BBANDS_LENGTH = 20
 BBANDS_STD = 2.0
 
 # --- Ulcer Index Parameters ---

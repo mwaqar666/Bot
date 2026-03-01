@@ -1,4 +1,5 @@
 from .base import Indicator
+from typing_extensions import Self
 
 import config
 
@@ -22,8 +23,9 @@ class Entropy(Indicator):
 
         return pd.DataFrame({"entropy": entropy}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         self.__min_max_scaler.fit(df[["entropy"]])
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         entropy = self.__min_max_scaler.transform(df[["entropy"]]).clip(-5, 5)

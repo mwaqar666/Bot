@@ -21,12 +21,6 @@ class OrderType(str, Enum):
     TAKE_PROFIT_MARKET = "TAKE_PROFIT_MARKET"
 
 
-class Action(int, Enum):
-    BUY = 2
-    SELL = 0
-    HOLD = 1
-
-
 class SignalDirection(int, Enum):
     BUY = 0
     SELL = 1

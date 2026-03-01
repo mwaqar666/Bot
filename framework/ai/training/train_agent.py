@@ -8,7 +8,6 @@ from stable_baselines3.common.callbacks import CallbackList, BaseCallback
 import config
 
 from framework.ai.training.trading_env import TradingEnvironment
-from framework.ai.models.tcn_feature_extractor import TCNFeatureExtractor
 
 
 class TradeMetricsCallback(BaseCallback):
@@ -38,7 +37,7 @@ class ModelTrainer:
         slippage_percent: float = 0.0005,
         sl_multiplier: float = 1.0,
         tp_multiplier: float = 2.0,
-        window_size: int = 60,
+        window_size: int = 1,
         total_timesteps: int = 5_000_000,
     ) -> None:
         self.features = features
@@ -162,11 +161,11 @@ class ModelTrainer:
         )
 
     def __create_model(self, environment: VecEnv) -> PPO:
-        policy_kwargs = dict(
-            features_extractor_class=TCNFeatureExtractor,
-            features_extractor_kwargs=dict(features_dim=64),
-            net_arch=dict(pi=[32, 32], vf=[32, 32]),
-        )
+        # policy_kwargs = dict(
+        #     features_extractor_class=TCNFeatureExtractor,
+        #     features_extractor_kwargs=dict(features_dim=64),
+        #     net_arch=dict(pi=[32, 32], vf=[32, 32]),
+        # )
 
         return PPO(
             "MlpPolicy",
@@ -179,7 +178,7 @@ class ModelTrainer:
             gae_lambda=self.gae_lambda,
             ent_coef=self.ent_coef,
             verbose=1,
-            policy_kwargs=policy_kwargs,
+            # policy_kwargs=policy_kwargs,
         )
 
     def __initialize_monitoring_and_logging(self) -> tuple[Run, CallbackList]:

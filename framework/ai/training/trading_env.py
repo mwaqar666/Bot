@@ -3,7 +3,7 @@ from gymnasium import spaces
 import numpy as np
 import pandas as pd
 
-from framework.data.data_types import Action, PositionSide
+from framework.data.data_types import SignalDirection, PositionSide
 
 
 class TradingEnvironment(gym.Env):
@@ -53,7 +53,7 @@ class TradingEnvironment(gym.Env):
         self.tp_multiplier = tp_multiplier
         self.symbol = symbol
 
-        # Actions: 2=Buy, 0=Sell, 1=Hold
+        # SignalDirection: 0=Buy, 1=Sell, 2=Hold
         self.action_space = spaces.Discrete(3)
 
         # Define Observation Space
@@ -84,7 +84,7 @@ class TradingEnvironment(gym.Env):
 
         return self.__next_observation(), {}
 
-    def step(self, action: Action) -> tuple[np.ndarray, float, bool, bool, dict]:
+    def step(self, action: SignalDirection) -> tuple[np.ndarray, float, bool, bool, dict]:
         """
         Execute one time step within the environment.
         In this per-candle model:
@@ -102,14 +102,14 @@ class TradingEnvironment(gym.Env):
 
         trade_pnl_pct = 0.0
 
-        if action != Action.HOLD:
+        if action != SignalDirection.HOLD:
             # 1. Initialize Trade Parameters
-            if action == Action.BUY:
+            if action == SignalDirection.BUY:
                 side = PositionSide.LONG
                 entry_price = open_price * (1 + self.slippage_percent)
                 sl_price = entry_price - (atr * self.sl_multiplier)
                 tp_price = entry_price + (atr * self.tp_multiplier)
-            else:  # Action.SELL
+            else:  # SignalDirection.SELL
                 side = PositionSide.SHORT
                 entry_price = open_price * (1 - self.slippage_percent)
                 sl_price = entry_price + (atr * self.sl_multiplier)
@@ -176,7 +176,7 @@ class TradingEnvironment(gym.Env):
         obs = self.__next_observation()
 
         # 6. Reward: Logarithmic Return
-        if action == Action.HOLD:
+        if action == SignalDirection.HOLD:
             reward = -0.001
         else:
             clamped_pnl = max(trade_pnl_pct, -0.9999)

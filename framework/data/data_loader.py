@@ -61,7 +61,7 @@ class DataLoader:
         """
         filename = self.__get_file_path(symbol, timeframe, suffix)
         if not os.path.exists(filename):
-            print(f"  [WARN] File not found: {filename}")
+            print(f"File not found: {filename}")
             return None
 
         print(f"Loading data from disk: {filename}...")
@@ -99,7 +99,7 @@ class DataLoader:
         return start_time, end_time
 
     def __fetch_candles(self, symbol: str, timeframe: str, start_time: datetime, end_time: datetime) -> list[list]:
-        '''
+        """
         Downloads OHLCV candles in parallel chunks for the given time range.
 
         Args:
@@ -110,7 +110,7 @@ class DataLoader:
 
         Returns:
             list[list]: A sorted, deduplicated list of OHLCV candles.
-        '''
+        """
         since = int(start_time.timestamp() * 1000)
         end_timestamp = int(end_time.timestamp() * 1000)
         tf_ms = self.__exchange.parse_timeframe(timeframe) * 1000  # timeframe duration in ms
@@ -129,7 +129,7 @@ class DataLoader:
         return [unique[k] for k in sorted(unique) if k <= end_timestamp]
 
     def __fetch_chunk(self, symbol: str, timeframe: str, since: int) -> list[list]:
-        '''
+        """
         Fetches a single page of OHLCV candles starting from the given timestamp.
 
         Args:
@@ -139,7 +139,7 @@ class DataLoader:
 
         Returns:
             list[list]: A list of OHLCV candles, or an empty list on error.
-        '''
+        """
         try:
             candles = self.__exchange.fetch_ohlcv(symbol, timeframe, since, limit=1000)
             if candles:

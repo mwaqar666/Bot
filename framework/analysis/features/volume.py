@@ -1,4 +1,5 @@
 from .base import Indicator
+from typing_extensions import Self
 
 import config
 
@@ -22,8 +23,9 @@ class ChaikinMoneyFlow(Indicator):
 
         return pd.DataFrame({"cmf": cmf}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         self.__robust_scaler.fit(df[["cmf"]])
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         cmf = self.__robust_scaler.transform(df[["cmf"]]).clip(-5, 5)
@@ -45,8 +47,9 @@ class ElderForceIndex(Indicator):
 
         return pd.DataFrame({"efi": efi}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         self.__robust_scaler.fit(df[["efi"]])
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         efi = self.__robust_scaler.transform(df[["efi"]]).clip(-5, 5)
@@ -68,8 +71,9 @@ class MoneyFlowIndex(Indicator):
 
         return pd.DataFrame({"mfi": mfi}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         self.__min_max_scaler.fit(df[["mfi"]])
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         mfi = self.__min_max_scaler.transform(df[["mfi"]]).clip(-5, 5)
@@ -91,9 +95,10 @@ class OnBalanceVolume(Indicator):
 
         return pd.DataFrame({"obv": obv}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         obv_diff = df["obv"].diff().fillna(0)
         self.__robust_scaler.fit(obv_diff.values.reshape(-1, 1))
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         obv_diff = df["obv"].diff().fillna(0)
@@ -122,8 +127,29 @@ class VolumeProfile(Indicator):
 
         return pd.DataFrame({}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
-        pass
+    def fit(self, df: pd.DataFrame) -> Self:
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame({}, index=df.index)
+
+
+# -----------------
+# 6. Volume Ratio
+# -----------------
+class VolumeRatio(Indicator):
+    def __init__(self) -> None:
+        self.__robust_scaler = RobustScaler()
+
+    def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
+        rolling_mean = df["volume"].rolling(window=20, min_periods=1).mean()
+        volume_ratio = df["volume"] / rolling_mean
+        return pd.DataFrame({"volume_ratio": volume_ratio}, index=df.index)
+
+    def fit(self, df: pd.DataFrame) -> Self:
+        self.__robust_scaler.fit(df[["volume_ratio"]])
+        return self
+
+    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+        volume_ratio = self.__robust_scaler.transform(df[["volume_ratio"]]).clip(-5, 5)
+        return pd.DataFrame({"volume_ratio": volume_ratio.flatten()}, index=df.index)

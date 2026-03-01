@@ -1,4 +1,5 @@
 from .base import Indicator
+from typing_extensions import Self
 
 import config
 
@@ -18,8 +19,9 @@ class EvenBetterSineWave(Indicator):
 
         return pd.DataFrame({"ebsw": ebsw}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
-        pass
+    def fit(self, df: pd.DataFrame) -> Self:
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        return pd.DataFrame({"ebsw": df["ebsw"].clip(-5, 5)}, index=df.index)
+        cols = ["ebsw"]
+        return pd.DataFrame(df[cols], columns=cols, index=df.index)

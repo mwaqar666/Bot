@@ -1,4 +1,5 @@
 from .base import Indicator
+from typing_extensions import Self
 
 import config
 
@@ -29,8 +30,9 @@ class AverageDirectionalIndex(Indicator):
 
         return pd.DataFrame({"adx": adx, "adx_osc": adx_osc}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         self.__robust_scaler.fit(df[["adx"]])
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         adx = self.__robust_scaler.transform(df[["adx"]]).clip(-5, 5)
@@ -53,8 +55,8 @@ class AroonOscillator(Indicator):
 
         return pd.DataFrame({"aroon_up": aroon_up, "aroon_down": aroon_down, "aroon": aroon}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
-        pass
+    def fit(self, df: pd.DataFrame) -> Self:
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame({}, index=df.index)
@@ -75,8 +77,9 @@ class ChoppinessIndex(Indicator):
 
         return pd.DataFrame({"chop": chop}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         self.__min_max_scaler.fit(df[["chop"]])
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         chop = self.__min_max_scaler.transform(df[["chop"]]).clip(-5, 5)
@@ -104,9 +107,10 @@ class ParabolicStopAndReverse(Indicator):
 
         return pd.DataFrame({"psar": psar, "psar_direction": psar_direction}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         percentage_distance = (df["close"] - df["psar"]) / df["close"]
         self.__robust_scaler.fit(percentage_distance.values.reshape(-1, 1))
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         percentage_distance = (df["close"] - df["psar"]) / df["close"]
@@ -133,8 +137,9 @@ class Vortex(Indicator):
 
         return pd.DataFrame({"vortex_p": vortex_p, "vortex_m": vortex_m, "vortex": vortex}, index=df.index)
 
-    def fit_scaler(self, df: pd.DataFrame) -> None:
+    def fit(self, df: pd.DataFrame) -> Self:
         self.__scaler.fit(df[["vortex"]])
+        return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         vortex = self.__scaler.transform(df[["vortex"]]).clip(-5, 5)
