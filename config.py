@@ -70,17 +70,11 @@ BBANDS_STD = 2.0
 UI_LENGTH = 14
 UI_SCALAR = 100
 
-# --- CMF Parameters ---
+# --- Chaikin Money Flow Parameters ---
 CMF_LENGTH = 20
 
-# --- EFI Parameters ---
-EFI_LENGTH = 13
-
-# --- MFI Parameters ---
+# --- Money Flow Index Parameters ---
 MFI_LENGTH = 14
-
-# --- VP Parameters ---
-VP_LENGTH = 10
 
 # --- Exit Multipliers ---
 SL_ATR_MULTIPLIER = 1.0  # Stop Loss distance = 1 * ATR

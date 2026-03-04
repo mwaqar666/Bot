@@ -36,7 +36,7 @@ class NormalizedAverageTrueRange(Feature):
 # 3. Bollinger Bands
 # -----------------
 class BollingerBands(Feature):
-    __cols = ["bb_width", "bb_pct"]
+    __cols = ["bb_width"]
 
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")

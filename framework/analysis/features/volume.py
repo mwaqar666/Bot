@@ -5,7 +5,7 @@ import config
 
 import pandas as pd
 import pandas_ta_classic as ta
-from sklearn.preprocessing import MinMaxScaler, RobustScaler
+from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
 
 
 # -----------------
@@ -13,7 +13,7 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 # -----------------
 class ChaikinMoneyFlow(Feature):
     def __init__(self) -> None:
-        self.__robust_scaler = RobustScaler()
+        self.__scaler = QuantileTransformer(output_distribution="normal")
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         cmf = ta.cmf(df["high"], df["low"], df["close"], df["volume"], length=config.CMF_LENGTH)
@@ -24,44 +24,21 @@ class ChaikinMoneyFlow(Feature):
         return pd.DataFrame({"cmf": cmf}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__robust_scaler.fit(df[["cmf"]])
+        self.__scaler.fit(df[["cmf"]])
         return self
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cmf = self.__robust_scaler.transform(df[["cmf"]])
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        cmf = self.__scaler.transform(df[["cmf"]])
         return pd.DataFrame({"cmf": cmf.flatten()}, index=df.index)
 
 
 # -----------------
-# 2. Elder Force Index
-# -----------------
-class ElderForceIndex(Feature):
-    def __init__(self) -> None:
-        self.__robust_scaler = RobustScaler()
-
-    def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        efi = ta.efi(df["close"], df["volume"], length=config.EFI_LENGTH)
-
-        if efi is None or efi.empty:
-            raise ValueError("Elder Force Index calculation failed")
-
-        return pd.DataFrame({"efi": efi}, index=df.index)
-
-    def fit(self, df: pd.DataFrame) -> Self:
-        self.__robust_scaler.fit(df[["efi"]])
-        return self
-
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        efi = self.__robust_scaler.transform(df[["efi"]])
-        return pd.DataFrame({"efi": efi.flatten()}, index=df.index)
-
-
-# -----------------
-# 3. Money Flow Index
+# 2. Money Flow Index
 # -----------------
 class MoneyFlowIndex(Feature):
     def __init__(self) -> None:
-        self.__min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.__minmax_scaler = MinMaxScaler(feature_range=(-1, 1))
+        self.__quantile_scaler = QuantileTransformer(output_distribution="normal")
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         mfi = ta.mfi(df["high"], df["low"], df["close"], df["volume"], length=config.MFI_LENGTH)
@@ -69,77 +46,29 @@ class MoneyFlowIndex(Feature):
         if mfi is None or mfi.empty:
             raise ValueError("Money Flow Index calculation failed")
 
-        return pd.DataFrame({"mfi": mfi}, index=df.index)
+        return pd.DataFrame({"mfi": mfi, "mfi_diff": mfi.diff()}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__min_max_scaler.fit(df[["mfi"]])
+        self.__minmax_scaler.fit(df[["mfi"]])
+        self.__quantile_scaler.fit(df[["mfi_diff"]])
         return self
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        mfi = self.__min_max_scaler.transform(df[["mfi"]])
-        return pd.DataFrame({"mfi": mfi.flatten()}, index=df.index)
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        mfi = self.__minmax_scaler.transform(df[["mfi"]])
+        mfi_diff = self.__quantile_scaler.transform(df[["mfi_diff"]])
+
+        return pd.DataFrame(
+            {"mfi": mfi.flatten(), "mfi_diff": mfi_diff.flatten()},
+            index=df.index,
+        )
 
 
 # -----------------
-# 4. On-Balance Volume (OBV)
-# -----------------
-class OnBalanceVolume(Feature):
-    def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        obv = ta.obv(df["close"], df["volume"])
-
-        if obv is None or obv.empty:
-            raise ValueError("On-Balance Volume calculation failed")
-
-        return pd.DataFrame({"obv": obv, "obv_diff": obv.diff()}, index=df.index)
-
-    def fit(self, df: pd.DataFrame) -> Self:
-
-        cols = ["obv", "obv_diff"]
-        self._scaler.fit(df[cols])
-        return self
-
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-
-        cols = ["obv", "obv_diff"]
-        norm = self._scaler.transform(df[cols])
-
-        return pd.DataFrame(norm, columns=cols, index=df.index)
-
-
-# -----------------
-# 5. Volume Profile (VP)
-# -----------------
-class VolumeProfile(Feature):
-    def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        # VP calculation logic in pandas_ta returns a DF with different index (price buckets)
-        # So we cannot easily attach it to the main DF without complex logic.
-        # Check if enabled in config or logic.
-
-        # Example dummy implementation to match structure
-        # vp = ta.vp(df["close"], df["volume"], width=config.VP_LENGTH)
-        # if vp is not None and not vp.empty:
-        #     df["vp_low"] = vp["low_close"]
-        #     df["vp_mean"] = vp["mean_close"]
-        #     df["vp_high"] = vp["high_close"]
-        #     df["vp_pos"] = vp["pos_volume"]
-        #     df["vp_neg"] = vp["neg_volume"]
-        #     df["vp_total"] = vp["total_volume"]
-
-        return pd.DataFrame({}, index=df.index)
-
-    def fit(self, df: pd.DataFrame) -> Self:
-        return self
-
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        return pd.DataFrame({}, index=df.index)
-
-
-# -----------------
-# 6. Volume Ratio
+# 3. Volume Ratio
 # -----------------
 class VolumeRatio(Feature):
     def __init__(self) -> None:
-        self.__robust_scaler = RobustScaler()
+        self.__scaler = QuantileTransformer(output_distribution="normal")
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         rolling_mean = df["volume"].rolling(window=20, min_periods=1).mean()
@@ -147,9 +76,9 @@ class VolumeRatio(Feature):
         return pd.DataFrame({"volume_ratio": volume_ratio}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__robust_scaler.fit(df[["volume_ratio"]])
+        self.__scaler.fit(df[["volume_ratio"]])
         return self
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        volume_ratio = self.__robust_scaler.transform(df[["volume_ratio"]])
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
+        volume_ratio = self.__scaler.transform(df[["volume_ratio"]])
         return pd.DataFrame({"volume_ratio": volume_ratio.flatten()}, index=df.index)
