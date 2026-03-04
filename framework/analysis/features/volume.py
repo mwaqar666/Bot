@@ -1,4 +1,4 @@
-from .base import Indicator
+from .base import Feature
 from typing_extensions import Self
 
 import config
@@ -11,7 +11,7 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler
 # -----------------
 # 1. Chaikin Money Flow
 # -----------------
-class ChaikinMoneyFlow(Indicator):
+class ChaikinMoneyFlow(Feature):
     def __init__(self) -> None:
         self.__robust_scaler = RobustScaler()
 
@@ -28,14 +28,14 @@ class ChaikinMoneyFlow(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        cmf = self.__robust_scaler.transform(df[["cmf"]]).clip(-5, 5)
+        cmf = self.__robust_scaler.transform(df[["cmf"]])
         return pd.DataFrame({"cmf": cmf.flatten()}, index=df.index)
 
 
 # -----------------
 # 2. Elder Force Index
 # -----------------
-class ElderForceIndex(Indicator):
+class ElderForceIndex(Feature):
     def __init__(self) -> None:
         self.__robust_scaler = RobustScaler()
 
@@ -52,14 +52,14 @@ class ElderForceIndex(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        efi = self.__robust_scaler.transform(df[["efi"]]).clip(-5, 5)
+        efi = self.__robust_scaler.transform(df[["efi"]])
         return pd.DataFrame({"efi": efi.flatten()}, index=df.index)
 
 
 # -----------------
 # 3. Money Flow Index
 # -----------------
-class MoneyFlowIndex(Indicator):
+class MoneyFlowIndex(Feature):
     def __init__(self) -> None:
         self.__min_max_scaler = MinMaxScaler(feature_range=(-1, 1))
 
@@ -76,40 +76,40 @@ class MoneyFlowIndex(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        mfi = self.__min_max_scaler.transform(df[["mfi"]]).clip(-5, 5)
+        mfi = self.__min_max_scaler.transform(df[["mfi"]])
         return pd.DataFrame({"mfi": mfi.flatten()}, index=df.index)
 
 
 # -----------------
 # 4. On-Balance Volume (OBV)
 # -----------------
-class OnBalanceVolume(Indicator):
-    def __init__(self) -> None:
-        self.__robust_scaler = RobustScaler()
-
+class OnBalanceVolume(Feature):
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         obv = ta.obv(df["close"], df["volume"])
 
         if obv is None or obv.empty:
             raise ValueError("On-Balance Volume calculation failed")
 
-        return pd.DataFrame({"obv": obv}, index=df.index)
+        return pd.DataFrame({"obv": obv, "obv_diff": obv.diff()}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        obv_diff = df["obv"].diff().fillna(0)
-        self.__robust_scaler.fit(obv_diff.values.reshape(-1, 1))
+
+        cols = ["obv", "obv_diff"]
+        self._scaler.fit(df[cols])
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        obv_diff = df["obv"].diff().fillna(0)
-        obv = self.__robust_scaler.transform(obv_diff.values.reshape(-1, 1)).clip(-5, 5)
-        return pd.DataFrame({"obv": obv.flatten()}, index=df.index)
+
+        cols = ["obv", "obv_diff"]
+        norm = self._scaler.transform(df[cols])
+
+        return pd.DataFrame(norm, columns=cols, index=df.index)
 
 
 # -----------------
 # 5. Volume Profile (VP)
 # -----------------
-class VolumeProfile(Indicator):
+class VolumeProfile(Feature):
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         # VP calculation logic in pandas_ta returns a DF with different index (price buckets)
         # So we cannot easily attach it to the main DF without complex logic.
@@ -137,7 +137,7 @@ class VolumeProfile(Indicator):
 # -----------------
 # 6. Volume Ratio
 # -----------------
-class VolumeRatio(Indicator):
+class VolumeRatio(Feature):
     def __init__(self) -> None:
         self.__robust_scaler = RobustScaler()
 
@@ -151,5 +151,5 @@ class VolumeRatio(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        volume_ratio = self.__robust_scaler.transform(df[["volume_ratio"]]).clip(-5, 5)
+        volume_ratio = self.__robust_scaler.transform(df[["volume_ratio"]])
         return pd.DataFrame({"volume_ratio": volume_ratio.flatten()}, index=df.index)

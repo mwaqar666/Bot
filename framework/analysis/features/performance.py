@@ -32,7 +32,7 @@ class DrawDown(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        dd_pct = self.__robust_scaler.transform(df[["dd_pct"]]).clip(-5, 5)
+        dd_pct = self.__robust_scaler.transform(df[["dd_pct"]])
         return pd.DataFrame({"dd_pct": dd_pct.flatten()}, index=df.index)
 
 
@@ -56,5 +56,5 @@ class LogReturn(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        log_return = self.__robust_scaler.transform(df[["log_return"]]).clip(-5, 5)
+        log_return = self.__robust_scaler.transform(df[["log_return"]])
         return pd.DataFrame({"log_return": log_return.flatten()}, index=df.index)

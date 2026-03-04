@@ -44,7 +44,7 @@ class FeatureEngineer:
         for feature in self.__features:
             feature.fit(df)
 
-    def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
+    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Normalizes all features in the DataFrame.
         Args:

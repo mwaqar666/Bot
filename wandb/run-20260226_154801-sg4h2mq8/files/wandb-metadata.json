@@ -1,0 +1,28 @@
+{
+  "os":  "Windows-10-10.0.26300-SP0",
+  "python":  "CPython 3.10.19",
+  "startedAt":  "2026-02-26T14:48:01.244352Z",
+  "program":  "c:\\Users\\mwaqa\\Desktop\\Bot\\train_agent.ipynb",
+  "codePath":  "c:\\Users\\mwaqa\\Desktop\\Bot\\train_agent.ipynb",
+  "codePathLocal":  "train_agent.ipynb",
+  "git":  {
+    "remote":  "https://github.com/mwaqar666/Bot.git",
+    "commit":  "c5975e4d86f7fe9b908df69911de6f9d4463ae3d"
+  },
+  "email":  "muhammadwaqar666@gmail.com",
+  "root":  "c:\\Users\\mwaqa\\Desktop\\Bot",
+  "host":  "Trinity",
+  "executable":  "c:\\Users\\mwaqa\\miniconda3\\envs\\trading_bot\\python.exe",
+  "cpu_count":  4,
+  "cpu_count_logical":  8,
+  "disk":  {
+    "/":  {
+      "total":  "510956400640",
+      "used":  "392779456512"
+    }
+  },
+  "memory":  {
+    "total":  "17019432960"
+  },
+  "writerId":  "7ieiu7y8pr3bw0qssjwsldoeu1qbmnk5"
+}

@@ -35,7 +35,7 @@ class AverageDirectionalIndex(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        adx = self.__robust_scaler.transform(df[["adx"]]).clip(-5, 5)
+        adx = self.__robust_scaler.transform(df[["adx"]])
         return pd.DataFrame({"adx": adx.flatten()}, index=df.index)
 
 
@@ -82,7 +82,7 @@ class ChoppinessIndex(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        chop = self.__min_max_scaler.transform(df[["chop"]]).clip(-5, 5)
+        chop = self.__min_max_scaler.transform(df[["chop"]])
         return pd.DataFrame({"chop": chop.flatten()}, index=df.index)
 
 
@@ -114,7 +114,7 @@ class ParabolicStopAndReverse(Indicator):
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
         percentage_distance = (df["close"] - df["psar"]) / df["close"]
-        psar = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1)).clip(-5, 5)
+        psar = self.__robust_scaler.transform(percentage_distance.values.reshape(-1, 1))
         return pd.DataFrame({"psar": psar.flatten(), "psar_direction": df["psar_direction"]}, index=df.index)
 
 
@@ -142,5 +142,5 @@ class Vortex(Indicator):
         return self
 
     def normalize(self, df: pd.DataFrame) -> pd.DataFrame:
-        vortex = self.__scaler.transform(df[["vortex"]]).clip(-5, 5)
+        vortex = self.__scaler.transform(df[["vortex"]])
         return pd.DataFrame({"vortex": vortex.flatten()}, index=df.index)
