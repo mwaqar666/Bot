@@ -19,10 +19,6 @@ MAX_LEVERAGE = 50  # Maximum allowable leverage (safety cap)
 RISK_PER_TRADE = 0.01  # Risk 1% of account balance per trade
 DATA_LOOKBACK_DAYS = 5  # Number of days of data to look back
 
-# --- Even Better Sine Wave Parameters ---
-EBSW_LENGTH = 40
-EBSW_BARS = 10
-
 # --- Moving Average Convergence Divergence Parameters ---
 MACD_FAST = 12
 MACD_SLOW = 26
@@ -39,14 +35,6 @@ SQUEEZE_KC_SCALAR = 1.5
 SQUEEZE_MOM_LENGTH = 12
 SQUEEZE_MOM_SMOOTH = 6
 SQUEEZE_MA_MODE = "ema"
-
-# --- Percentage Volume Oscillator Parameters ---
-PVO_FAST = 12
-PVO_SLOW = 26
-PVO_SIGNAL = 9
-
-# --- Williams %R Parameters ---
-WILLR_LENGTH = 14
 
 # --- Super Trend Parameters ---
 SUPER_TREND_LENGTH = 7
@@ -66,23 +54,10 @@ ENTROPY_BASE = 2
 # --- ADX Parameters ---
 ADX_LENGTH = 14
 
-# --- Aroon Parameters ---
-AROON_LENGTH = 14
-AROON_SCALAR = 100
-
-# --- Choppiness Index Parameters ---
-CHOP_LENGTH = 14
-CHOP_ATR_LENGTH = 1
-CHOP_LN = False
-CHOP_SCALAR = 100
-
 # --- Parabolic Stop and Reverse Parameters ---
 PSAR_INIT_ACC = 0.02
 PSAR_ACC = 0.02
 PSAR_MAX_ACC = 0.2
-
-# --- Vortex Parameters ---
-VORTEX_LENGTH = 14
 
 # --- Average True Range Parameters ---
 ATR_LENGTH = 14
