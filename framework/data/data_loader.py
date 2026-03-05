@@ -20,7 +20,7 @@ class DataLoader:
         """
         self.__exchange = ccxt.binance({"enableRateLimit": True})
 
-    def fetch_historical_data(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, days: int = config.DATA_LOOKBACK_DAYS) -> Optional[pd.DataFrame]:
+    def fetch_historical_data(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, days: int = config.DATA_LOOKBACK_DAYS) -> pd.DataFrame:
         """
         Downloads historical OHLCV data from Binance.
 
@@ -30,15 +30,14 @@ class DataLoader:
             days (int): Number of days of historical data to fetch.
 
         Returns:
-            Optional[pd.DataFrame]: A DataFrame containing the historical data,
-                                    or None if no data was found.
+            pd.DataFrame: A DataFrame containing the historical data.
         """
         start_time, end_time = self.__calculate_time_range(days)
         all_candles = self.__fetch_candles(symbol, timeframe, start_time, end_time)
 
         if not all_candles:
             print("  No data found.")
-            return None
+            raise ValueError("No historical data could be fetched for the given parameters.")
 
         df = self.__convert_to_dataframe(all_candles)
 
@@ -47,7 +46,7 @@ class DataLoader:
 
         return df
 
-    def load_data_from_disk(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, suffix: str = "") -> Optional[pd.DataFrame]:
+    def load_data_from_disk(self, symbol: str = config.SYMBOL, timeframe: str = config.TIMEFRAME, suffix: str = "") -> pd.DataFrame:
         """
         Loads historical data from a local CSV file.
 
@@ -57,12 +56,11 @@ class DataLoader:
             suffix (str): Suffix to append to the filename.
 
         Returns:
-            Optional[pd.DataFrame]: The loaded DataFrame or None if not found.
+            pd.DataFrame: The loaded DataFrame.
         """
         filename = self.__get_file_path(symbol, timeframe, suffix)
         if not os.path.exists(filename):
-            print(f"File not found: {filename}")
-            return None
+            raise ValueError("File not found.")
 
         print(f"Loading data from disk: {filename}...")
         df = pd.read_csv(filename)
