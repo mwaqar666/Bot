@@ -83,7 +83,7 @@ class VolumeWeightedAveragePrice(Feature):
 # 3. Exponential Moving Average
 # -----------------
 class ExponentialMovingAverage(Feature):
-    __cols = ["ema_fast_diff", "ema_spread", "ema_spread_slope"]
+    __cols = ["ema_spread", "ema_spread_diff"]
 
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
@@ -95,15 +95,12 @@ class ExponentialMovingAverage(Feature):
         if ema_fast is None or ema_fast.empty or ema_slow is None or ema_slow.empty:
             raise ValueError("EMA calculation failed")
 
-        ema_fast_diff = (df["close"] - ema_fast) / df["close"]
         ema_spread = (ema_fast - ema_slow) / ema_slow
-        ema_spread_slope = ema_spread.diff()
 
         return pd.DataFrame(
             {
-                "ema_fast_diff": ema_fast_diff,
                 "ema_spread": ema_spread,
-                "ema_spread_slope": ema_spread_slope,
+                "ema_spread_diff": ema_spread.diff(),
             },
             index=df.index,
         )

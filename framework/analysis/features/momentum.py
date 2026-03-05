@@ -57,8 +57,7 @@ class MovingAverageConvergenceDivergence(Feature):
 # -----------------
 class RelativeStrengthIndex(Feature):
     def __init__(self) -> None:
-        self.__minmax_scaler = MinMaxScaler(feature_range=(-1, 1))
-        self.__quantile_scaler = QuantileTransformer(output_distribution="normal")
+        self.__scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         rsi = ta.rsi(df["close"], length=config.RSI_LENGTH)
@@ -69,18 +68,12 @@ class RelativeStrengthIndex(Feature):
         return pd.DataFrame({"rsi": rsi, "rsi_diff": rsi.diff()}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__minmax_scaler.fit(df[["rsi"]])
-        self.__quantile_scaler.fit(df[["rsi_diff"]])
+        self.__scaler.fit(df[["rsi"]])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        rsi_norm = self.__minmax_scaler.transform(df[["rsi"]])
-        rsi_diff_norm = self.__quantile_scaler.transform(df[["rsi_diff"]])
-
-        return pd.DataFrame(
-            {"rsi": rsi_norm.flatten(), "rsi_diff": rsi_diff_norm.flatten()},
-            index=df.index,
-        )
+        rsi_norm = self.__scaler.transform(df[["rsi"]])
+        return pd.DataFrame({"rsi": rsi_norm.flatten()}, index=df.index)
 
 
 # -----------------

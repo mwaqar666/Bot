@@ -13,8 +13,6 @@ from sklearn.preprocessing import QuantileTransformer
 # 1. Average Directional Index
 # -----------------
 class AverageDirectionalIndex(Feature):
-    __cols = ["adx", "adx_osc"]
-
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
@@ -33,12 +31,12 @@ class AverageDirectionalIndex(Feature):
         return pd.DataFrame({"adx": adx, "adx_osc": adx_osc}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[self.__cols])
+        self.__scaler.fit(df[["adx"]])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        scaled = self.__scaler.transform(df[self.__cols])
-        return pd.DataFrame(scaled, columns=self.__cols, index=df.index)
+        scaled = self.__scaler.transform(df[["adx"]])
+        return pd.DataFrame({"adx": scaled.flatten()}, index=df.index)
 
 
 # -----------------

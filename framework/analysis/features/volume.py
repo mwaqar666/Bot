@@ -37,8 +37,7 @@ class ChaikinMoneyFlow(Feature):
 # -----------------
 class MoneyFlowIndex(Feature):
     def __init__(self) -> None:
-        self.__minmax_scaler = MinMaxScaler(feature_range=(-1, 1))
-        self.__quantile_scaler = QuantileTransformer(output_distribution="normal")
+        self.__scaler = MinMaxScaler(feature_range=(-1, 1))
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
         mfi = ta.mfi(df["high"], df["low"], df["close"], df["volume"], length=config.MFI_LENGTH)
@@ -49,18 +48,13 @@ class MoneyFlowIndex(Feature):
         return pd.DataFrame({"mfi": mfi, "mfi_diff": mfi.diff()}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__minmax_scaler.fit(df[["mfi"]])
-        self.__quantile_scaler.fit(df[["mfi_diff"]])
+        self.__scaler.fit(df[["mfi"]])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        mfi = self.__minmax_scaler.transform(df[["mfi"]])
-        mfi_diff = self.__quantile_scaler.transform(df[["mfi_diff"]])
+        mfi = self.__scaler.transform(df[["mfi"]])
 
-        return pd.DataFrame(
-            {"mfi": mfi.flatten(), "mfi_diff": mfi_diff.flatten()},
-            index=df.index,
-        )
+        return pd.DataFrame({"mfi": mfi.flatten()}, index=df.index)
 
 
 # -----------------
