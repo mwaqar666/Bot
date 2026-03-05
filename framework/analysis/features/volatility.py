@@ -9,9 +9,11 @@ from sklearn.preprocessing import QuantileTransformer
 
 
 # -----------------
-# 2. Normalized Average True Range
+# 1. Normalized Average True Range
 # -----------------
 class NormalizedAverageTrueRange(Feature):
+    __cols = ["natr"]
+
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
@@ -24,16 +26,16 @@ class NormalizedAverageTrueRange(Feature):
         return pd.DataFrame({"natr": natr}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["natr"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        natr = self.__scaler.transform(df[["natr"]])
-        return pd.DataFrame({"natr": natr.flatten()}, index=df.index)
+        natr_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(natr_norm, columns=self.__cols, index=df.index)
 
 
 # -----------------
-# 3. Bollinger Bands
+# 2. Bollinger Bands
 # -----------------
 class BollingerBands(Feature):
     __cols = ["bb_width"]
@@ -53,31 +55,23 @@ class BollingerBands(Feature):
         bb_width = bb[f"BBB_{config.BBANDS_LENGTH}_{config.BBANDS_STD}"]
         bb_pct = bb[f"BBP_{config.BBANDS_LENGTH}_{config.BBANDS_STD}"]
 
-        return pd.DataFrame(
-            {
-                "bb_lower": bb_lower,
-                "bb_mid": bb_mid,
-                "bb_upper": bb_upper,
-                "bb_width": bb_width,
-                "bb_pct": bb_pct,
-            },
-            index=df.index,
-        )
+        return pd.DataFrame({"bb_lower": bb_lower, "bb_mid": bb_mid, "bb_upper": bb_upper, "bb_width": bb_width, "bb_pct": bb_pct}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
         self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        norm = self.__scaler.transform(df[self.__cols])
-
-        return pd.DataFrame(norm, columns=self.__cols, index=df.index)
+        bb_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(bb_norm, columns=self.__cols, index=df.index)
 
 
 # -----------------
-# 4. Ulcer Index
+# 3. Ulcer Index
 # -----------------
 class UlcerIndex(Feature):
+    __cols = ["ui"]
+
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
@@ -90,9 +84,9 @@ class UlcerIndex(Feature):
         return pd.DataFrame({"ui": ui}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["ui"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        ui = self.__scaler.transform(df[["ui"]])
-        return pd.DataFrame({"ui": ui.flatten()}, index=df.index)
+        ui_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(ui_norm, columns=self.__cols, index=df.index)

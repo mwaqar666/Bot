@@ -12,6 +12,8 @@ from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
 # 1. Chaikin Money Flow
 # -----------------
 class ChaikinMoneyFlow(Feature):
+    __cols = ["cmf"]
+
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
@@ -24,18 +26,20 @@ class ChaikinMoneyFlow(Feature):
         return pd.DataFrame({"cmf": cmf}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["cmf"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        cmf = self.__scaler.transform(df[["cmf"]])
-        return pd.DataFrame({"cmf": cmf.flatten()}, index=df.index)
+        cmf_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(cmf_norm, columns=self.__cols, index=df.index)
 
 
 # -----------------
 # 2. Money Flow Index
 # -----------------
 class MoneyFlowIndex(Feature):
+    __cols = ["mfi"]
+
     def __init__(self) -> None:
         self.__scaler = MinMaxScaler(feature_range=(-1, 1))
 
@@ -45,22 +49,23 @@ class MoneyFlowIndex(Feature):
         if mfi is None or mfi.empty:
             raise ValueError("Money Flow Index calculation failed")
 
-        return pd.DataFrame({"mfi": mfi, "mfi_diff": mfi.diff()}, index=df.index)
+        return pd.DataFrame({"mfi": mfi}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["mfi"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        mfi = self.__scaler.transform(df[["mfi"]])
-
-        return pd.DataFrame({"mfi": mfi.flatten()}, index=df.index)
+        mfi_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(mfi_norm, columns=self.__cols, index=df.index)
 
 
 # -----------------
 # 3. Volume Ratio
 # -----------------
 class VolumeRatio(Feature):
+    __cols = ["volume_ratio"]
+
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
@@ -70,9 +75,9 @@ class VolumeRatio(Feature):
         return pd.DataFrame({"volume_ratio": volume_ratio}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["volume_ratio"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        volume_ratio = self.__scaler.transform(df[["volume_ratio"]])
-        return pd.DataFrame({"volume_ratio": volume_ratio.flatten()}, index=df.index)
+        volume_ratio_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(volume_ratio_norm, columns=self.__cols, index=df.index)

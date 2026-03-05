@@ -13,6 +13,8 @@ from sklearn.preprocessing import QuantileTransformer
 # 1. Average Directional Index
 # -----------------
 class AverageDirectionalIndex(Feature):
+    __cols = ["adx"]
+
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
@@ -31,18 +33,20 @@ class AverageDirectionalIndex(Feature):
         return pd.DataFrame({"adx": adx, "adx_osc": adx_osc}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["adx"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        scaled = self.__scaler.transform(df[["adx"]])
-        return pd.DataFrame({"adx": scaled.flatten()}, index=df.index)
+        adx_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(adx_norm, columns=self.__cols, index=df.index)
 
 
 # -----------------
 # 2. Parabolic Stop and Reverse
 # -----------------
 class ParabolicStopAndReverse(Feature):
+    __cols = ["psar_dist"]
+
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
@@ -56,29 +60,14 @@ class ParabolicStopAndReverse(Feature):
         psar_s = psar[f"PSARs_{config.PSAR_INIT_ACC}_{config.PSAR_MAX_ACC}"]
 
         psar_line = psar_l.fillna(psar_s)
-        psar_direction = np.where(psar_l.notna(), 1, -1)
         psar_dist = (df["close"] - psar_line) / df["close"]
 
-        return pd.DataFrame(
-            {
-                "psar": psar_line,
-                "psar_direction": psar_direction,
-                "psar_dist": psar_dist,
-            },
-            index=df.index,
-        )
+        return pd.DataFrame({"psar_line": psar_line, "psar_dist": psar_dist}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["psar_dist"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        psar_dist = self.__scaler.transform(df[["psar_dist"]])
-
-        return pd.DataFrame(
-            {
-                "psar_dist": psar_dist.flatten(),
-                "psar_direction": df["psar_direction"].astype(float),
-            },
-            index=df.index,
-        )
+        psar_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(psar_norm, columns=self.__cols, index=df.index)

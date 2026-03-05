@@ -12,50 +12,39 @@ from sklearn.preprocessing import MinMaxScaler, QuantileTransformer
 # 1. Moving Average Convergence Divergence
 # -----------------
 class MovingAverageConvergenceDivergence(Feature):
-    __cols = ["macd_hist", "macd_hist_diff"]
+    __cols = ["macd_hist"]
 
     def __init__(self):
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        macd_data = ta.macd(df["close"], fast=config.MACD_FAST, slow=config.MACD_SLOW, signal=config.MACD_SIGNAL)
+        macd = ta.macd(df["close"], fast=config.MACD_FAST, slow=config.MACD_SLOW, signal=config.MACD_SIGNAL)
 
-        if macd_data is None or macd_data.empty:
+        if macd is None or macd.empty:
             raise ValueError("MACD calculation failed")
 
-        macd = macd_data[f"MACD_{config.MACD_FAST}_{config.MACD_SLOW}_{config.MACD_SIGNAL}"]
-        macd_signal = macd_data[f"MACDs_{config.MACD_FAST}_{config.MACD_SLOW}_{config.MACD_SIGNAL}"]
-        macd_hist = macd_data[f"MACDh_{config.MACD_FAST}_{config.MACD_SLOW}_{config.MACD_SIGNAL}"]
-
+        macd_line = macd[f"MACD_{config.MACD_FAST}_{config.MACD_SLOW}_{config.MACD_SIGNAL}"]
+        macd_signal = macd[f"MACDs_{config.MACD_FAST}_{config.MACD_SLOW}_{config.MACD_SIGNAL}"]
+        macd_hist = macd[f"MACDh_{config.MACD_FAST}_{config.MACD_SLOW}_{config.MACD_SIGNAL}"]
         macd_hist = macd_hist / df["close"]
 
-        return pd.DataFrame(
-            {
-                "macd": macd,
-                "macd_signal": macd_signal,
-                "macd_hist": macd_hist,
-                "macd_diff": macd.diff(),
-                "macd_signal_diff": macd_signal.diff(),
-                "macd_hist_diff": macd_hist.diff(),
-            },
-            index=df.index,
-        )
+        return pd.DataFrame({"macd_line": macd_line, "macd_signal": macd_signal, "macd_hist": macd_hist}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-
         self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        norm = self.__scaler.transform(df[self.__cols])
-
-        return pd.DataFrame(norm, columns=self.__cols, index=df.index)
+        macd_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(macd_norm, columns=self.__cols, index=df.index)
 
 
 # -----------------
 # 2. Relative Strength Index
 # -----------------
 class RelativeStrengthIndex(Feature):
+    __cols = ["rsi"]
+
     def __init__(self) -> None:
         self.__scaler = MinMaxScaler(feature_range=(-1, 1))
 
@@ -65,15 +54,15 @@ class RelativeStrengthIndex(Feature):
         if rsi is None or rsi.empty:
             raise ValueError("RSI calculation failed")
 
-        return pd.DataFrame({"rsi": rsi, "rsi_diff": rsi.diff()}, index=df.index)
+        return pd.DataFrame({"rsi": rsi}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["rsi"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        rsi_norm = self.__scaler.transform(df[["rsi"]])
-        return pd.DataFrame({"rsi": rsi_norm.flatten()}, index=df.index)
+        rsi_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(rsi_norm, columns=self.__cols, index=df.index)
 
 
 # -----------------
@@ -91,21 +80,19 @@ class TTMSqueeze(Feature):
 
         sqz = sqz_data[f"SQZ_{config.BBANDS_LENGTH}_{config.BBANDS_STD}_{config.SQUEEZE_KC_LENGTH}_{config.SQUEEZE_KC_SCALAR}"]
         sqz_on = sqz_data["SQZ_ON"]
-        sqz_off = sqz_data["SQZ_OFF"]
-        sqz_no = sqz_data["SQZ_NO"]
 
-        return pd.DataFrame({"sqz": sqz, "sqz_on": sqz_on, "sqz_off": sqz_off, "sqz_no": sqz_no}, index=df.index)
+        sqz = sqz / df["close"]
+
+        return pd.DataFrame({"sqz": sqz, "sqz_on": sqz_on}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
         self.__scaler.fit(df[["sqz"]])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        sqz_norm = self.__scaler.transform(df[["sqz"]])
-
         return pd.DataFrame(
             {
-                "sqz": sqz_norm.flatten(),
+                "sqz": self.__scaler.transform(df[["sqz"]]).flatten(),
                 "sqz_on": df["sqz_on"].astype(float),  # binary: 1 = squeeze active, 0 = not
             },
             index=df.index,

@@ -12,34 +12,37 @@ from sklearn.preprocessing import QuantileTransformer
 # 1. Draw Down
 # -----------------
 class DrawDown(Feature):
+    __cols = ["dd_pct"]
+
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        draw_down = ta.drawdown(df["close"])
+        dd = ta.drawdown(df["close"])
 
-        if draw_down is None or draw_down.empty:
+        if dd is None or dd.empty:
             raise ValueError("Drawdown calculation failed")
 
-        dd = draw_down["DD"]
-        dd_pct = draw_down["DD_PCT"]
-        dd_log = draw_down["DD_LOG"]
+        dd_line = dd["DD"]
+        dd_pct = dd["DD_PCT"]
 
-        return pd.DataFrame({"dd": dd, "dd_pct": dd_pct, "dd_log": dd_log}, index=df.index)
+        return pd.DataFrame({"dd_line": dd_line, "dd_pct": dd_pct}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["dd_pct"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        dd_pct = self.__scaler.transform(df[["dd_pct"]])
-        return pd.DataFrame({"dd_pct": dd_pct.flatten()}, index=df.index)
+        dd_pct = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(dd_pct, columns=self.__cols, index=df.index)
 
 
 # -----------------
 # 2. Log Return
 # -----------------
 class LogReturn(Feature):
+    __cols = ["log_return"]
+
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
@@ -52,9 +55,9 @@ class LogReturn(Feature):
         return pd.DataFrame({"log_return": log_return}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[["log_return"]])
+        self.__scaler.fit(df[self.__cols])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        log_return = self.__scaler.transform(df[["log_return"]])
-        return pd.DataFrame({"log_return": log_return.flatten()}, index=df.index)
+        log_return_norm = self.__scaler.transform(df[self.__cols])
+        return pd.DataFrame(log_return_norm, columns=self.__cols, index=df.index)

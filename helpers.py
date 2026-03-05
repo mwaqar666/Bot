@@ -83,26 +83,31 @@ def _plot_level(fig: plt.Figure, subplot_spec: gridspec.SubplotSpec, label: str,
     inner = gridspec.GridSpecFromSubplotSpec(2, len(cols), subplot_spec=subplot_spec)
 
     for col_idx, col in enumerate(cols):
-        _describe_level(label, df[col])
+        _describe_df(label, df[col], ["skew", "kurtosis"])
+
         _plot_time_series(fig, inner[0, col_idx], label, col, df[col], color)
         _plot_histogram(fig, inner[1, col_idx], label, col, df[col], color)
 
 
-def _describe_level(label: str, df: pd.DataFrame) -> None:
+def _describe_df(label: str, df: pd.Series, stats: list[str] = []) -> None:
     """
-    Prints a description of the given DataFrame.
+    Prints a description of the given Series.
 
     Args:
-        label (str): Label for the DataFrame.
-        df (pd.DataFrame): DataFrame to describe.
+        label (str): Label for the Series.
+        df (pd.Series): Series to describe.
+        stats (list[str]): Additional statistics to compute (e.g. 'skew', 'kurtosis').
 
     Returns:
         None
     """
-    print(f"[{label}] Kurtosis:", df.kurt())
-    print(f"[{label}] Skewness:", df.skew())
-    print(f"[{label}] {df.describe()}")
-    print("\n")
+    description = df.describe()
+
+    if stats:
+        extra = pd.Series({stat: getattr(df, stat)() for stat in stats})
+        description = pd.concat([description, extra])
+
+    print(f"[{label}: {df.name}]\n{description}\n")
 
 
 def _plot_time_series(fig: plt.Figure, subplot_spec: gridspec.SubplotSpec, label: str, col: str, series: pd.Series, color: str) -> None:
