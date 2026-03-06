@@ -9,29 +9,29 @@ from sklearn.preprocessing import QuantileTransformer
 
 
 # -----------------
-# 1. Normalized Average True Range
+# 1. Average True Range
 # -----------------
-class NormalizedAverageTrueRange(Feature):
-    __cols = ["natr"]
-
+class AverageTrueRange(Feature):
     def __init__(self) -> None:
         self.__scaler = QuantileTransformer(output_distribution="normal")
 
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:
-        natr = ta.natr(df["high"], df["low"], df["close"], length=config.ATR_LENGTH)
+        atr = ta.atr(df["high"], df["low"], df["close"], length=config.ATR_LENGTH)
 
-        if natr is None or natr.empty:
-            raise ValueError("Normalized ATR calculation failed")
+        if atr is None or atr.empty:
+            raise ValueError("Average True Range calculation failed")
 
-        return pd.DataFrame({"natr": natr}, index=df.index)
+        natr = atr * (100 / df["close"])
+
+        return pd.DataFrame({"atr": atr, "natr": natr}, index=df.index)
 
     def fit(self, df: pd.DataFrame) -> Self:
-        self.__scaler.fit(df[self.__cols])
+        self.__scaler.fit(df[["natr"]])
         return self
 
     def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        natr_norm = self.__scaler.transform(df[self.__cols])
-        return pd.DataFrame(natr_norm, columns=self.__cols, index=df.index)
+        natr_norm = self.__scaler.transform(df[["natr"]])
+        return pd.DataFrame({"atr": df["atr"], "natr": natr_norm.flatten()}, index=df.index)
 
 
 # -----------------

@@ -5,7 +5,6 @@ import config
 
 import pandas as pd
 import pandas_ta_classic as ta
-import numpy as np
 from sklearn.preprocessing import QuantileTransformer
 
 

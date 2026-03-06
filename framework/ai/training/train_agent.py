@@ -1,51 +1,153 @@
 import pandas as pd
-from wandb import init as wandb_init, Run
-from wandb.integration.sb3 import WandbCallback
+from IPython.display import clear_output
+import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv
 from stable_baselines3.common.callbacks import CallbackList, BaseCallback
-
-import config
 
 from framework.ai.training.trading_env import TradingEnvironment
 
 
 class TradeMetricsCallback(BaseCallback):
     """
-    Logs custom trading metrics from the environment's info dict into
-    the SB3 logger (stdout table + W&B) on every rollout.
+    Stores trading metrics from the environment's info dict and renders
+    a live 3×2 dashboard every `plot_every` timesteps during training.
     """
+
+    _TRADE_COLS: list[str] = [
+        "balance",
+        "trade_pnl",
+        "action",
+        "entry_price",
+        "exit_price",
+        "sl_price",
+        "tp_price",
+    ]
+
+    def __init__(self, plot_every: int = 2048) -> None:
+        """
+        Initializes the callback with an empty history and plot interval.
+
+        Args:
+            plot_every (int): Refresh the dashboard every N timesteps.
+
+        Returns:
+            None
+        """
+        super().__init__()
+        self.plot_every = plot_every
+        self.timesteps: list[int] = []
+        self.history: dict[str, list] = {col: [] for col in self._TRADE_COLS}
 
     def _on_step(self) -> bool:
         for info in self.locals.get("infos", []):
-            self.logger.record("trade/net_worth", info.get("net_worth", 0))
-            self.logger.record("trade/balance", info.get("balance", 0))
-            self.logger.record("trade/trade_pnl", info.get("trade_pnl", 0))
-            self.logger.record("trade/reward", info.get("reward", 0))
-            self.logger.record("trade/action", info.get("action", 0))
+            self.timesteps.append(self.num_timesteps)
+            for col in self._TRADE_COLS:
+                self.history[col].append(info.get(col, 0))
+            for key, val in info.items():
+                if key != "step":
+                    self.logger.record(f"trade/{key}", val)
+
+        if self.num_timesteps % self.plot_every == 0:
+            self._refresh_plot()
+
         return True
+
+    def _refresh_plot(self) -> None:
+        """
+        Clears the Jupyter cell output and renders a 3×2 training dashboard.
+
+        Returns:
+            None
+        """
+        import numpy as np
+
+        ts = np.array(self.timesteps)
+        balance = np.array(self.history["balance"])
+        trade_pnl = np.array(self.history["trade_pnl"])
+        actions = np.array(self.history["action"])
+        exit_prices = np.array(self.history["exit_price"])
+        sl_prices = np.array(self.history["sl_price"])
+        tp_prices = np.array(self.history["tp_price"])
+
+        # Mask for actual trades (HOLD = 2 produces no trade)
+        trade_mask = actions != 2
+        wins = trade_pnl[trade_mask & (trade_pnl > 0)]
+        losses = trade_pnl[trade_mask & (trade_pnl <= 0)]
+
+        # Exit reason detection
+        sl_hit = trade_mask & np.isclose(exit_prices, sl_prices, rtol=1e-6)
+        tp_hit = trade_mask & np.isclose(exit_prices, tp_prices, rtol=1e-6)
+        close_hit = trade_mask & ~sl_hit & ~tp_hit
+
+        clear_output(wait=True)
+        fig, axes = plt.subplots(3, 2, figsize=(16, 12))
+        fig.suptitle(
+            f"Training Dashboard — Step {self.num_timesteps:,} | Trades: {trade_mask.sum()} | Win Rate: {len(wins) / max(trade_mask.sum(), 1) * 100:.1f}%",
+            fontsize=13,
+        )
+
+        # 1. Balance over time
+        axes[0, 0].plot(ts, balance, linewidth=0.8, color="steelblue")
+        axes[0, 0].set_title("Balance ($)")
+        axes[0, 0].set_ylabel("$")
+
+        # 2. Per-trade PnL scatter (green=win, red=loss)
+        colours = ["green" if p > 0 else "red" for p in trade_pnl[trade_mask]]
+        axes[0, 1].scatter(ts[trade_mask], trade_pnl[trade_mask], s=2, alpha=0.4, c=colours)
+        axes[0, 1].axhline(0, color="black", linewidth=0.8, linestyle="--")
+        axes[0, 1].set_title("Trade PnL per Step (%)")
+
+        # 3. Action distribution
+        action_labels = ["BUY", "SELL", "HOLD"]
+        action_counts = [(actions == i).sum() for i in range(3)]
+        axes[1, 0].bar(action_labels, action_counts, color=["green", "red", "grey"])
+        axes[1, 0].set_title("Action Distribution")
+        axes[1, 0].set_ylabel("Count")
+
+        # 4. Win / loss histogram
+        axes[1, 1].hist(wins, bins=30, color="green", alpha=0.6, label=f"Wins ({len(wins)})")
+        axes[1, 1].hist(losses, bins=30, color="red", alpha=0.6, label=f"Losses ({len(losses)})")
+        axes[1, 1].axvline(0, color="black", linewidth=0.8)
+        axes[1, 1].set_title("Win / Loss Distribution")
+        axes[1, 1].set_xlabel("PnL (%)")
+        axes[1, 1].legend()
+
+        # 5. Exit reason (SL / TP / Closed at candle close)
+        exit_counts = [sl_hit.sum(), tp_hit.sum(), close_hit.sum()]
+        axes[2, 0].bar(["SL Hit", "TP Hit", "Closed @ Close"], exit_counts, color=["red", "green", "steelblue"])
+        axes[2, 0].set_title("Exit Reason")
+        axes[2, 0].set_ylabel("Count")
+
+        # 6. Cumulative trade PnL
+        cum_pnl = np.cumsum(trade_pnl[trade_mask])
+        axes[2, 1].plot(range(len(cum_pnl)), cum_pnl, color="purple", linewidth=0.8)
+        axes[2, 1].axhline(0, color="black", linewidth=0.8, linestyle="--")
+        axes[2, 1].set_title("Cumulative Trade PnL")
+        axes[2, 1].set_xlabel("Trade #")
+
+        plt.tight_layout()
+        plt.show()
 
 
 class ModelTrainer:
     def __init__(
         self,
         features: list[str],
-        symbol: str = config.SYMBOL,
+        model_save_path: str,
         initial_balance: float = 10_000,
         risk_per_trade: float = 0.01,
         fee_percent: float = 0.001,
-        slippage_percent: float = 0.0005,
         sl_multiplier: float = 1.0,
         tp_multiplier: float = 2.0,
         window_size: int = 1,
-        total_timesteps: int = 5_000_000,
+        total_timesteps: int = 1_000_000,
     ) -> None:
         self.features = features
-        self.symbol = symbol
+        self.model_save_path = model_save_path
         self.initial_balance = initial_balance
         self.risk_per_trade = risk_per_trade
         self.fee_percent = fee_percent
-        self.slippage_percent = slippage_percent
         self.sl_multiplier = sl_multiplier
         self.tp_multiplier = tp_multiplier
         self.window_size = window_size
@@ -59,22 +161,19 @@ class ModelTrainer:
         self.gae_lambda = 0.95
         self.ent_coef = 0.01
 
-        self.model_path = "framework/ai/models/ppo_tcn_v1"
-        self.wandb_project = "trading-bot"  # Name of your project on wandb.ai
-
     def train(self, train_df: pd.DataFrame) -> None:
         print(f"Training on {len(self.features)} Features: {self.features}")
 
         # 1. Create Environment (Training on Train Set)
-        env = self.__create_vector_environment_callback(train_df)
+        env = DummyVecEnv([lambda: self.__create_environment(train_df)])
 
         # 2. Initialize PPO
         print("Initializing PPO Agent...")
 
         model = self.__create_model(env)
 
-        # 3. Initialize W&B run
-        run, callback_list = self.__initialize_monitoring_and_logging()
+        # 3. Create TradeMetrics Callback
+        callback_list = CallbackList([TradeMetricsCallback()])
 
         # 4. Train
         print(f"Training for {self.total_timesteps} steps...")
@@ -82,12 +181,10 @@ class ModelTrainer:
             model.learn(total_timesteps=self.total_timesteps, callback=callback_list)
         except KeyboardInterrupt:
             print("Training interrupted manually. Saving current model...")
-        finally:
-            run.finish()
 
         # 5. Save
-        print(f"Saving model to {self.model_path}...")
-        model.save(self.model_path)
+        print(f"Saving model to {self.model_save_path}...")
+        model.save(self.model_save_path)
         print("Training complete.")
 
     def evaluate(self, df: pd.DataFrame, label: str = "Validation") -> dict:
@@ -107,7 +204,7 @@ class ModelTrainer:
 
         env = self.__create_environment(df)
 
-        model = PPO.load(self.model_path, env=env)
+        model = PPO.load(self.model_save_path, env=env)
         obs, _ = env.reset()
         done = False
 
@@ -117,19 +214,19 @@ class ModelTrainer:
             obs, _, terminated, truncated, _ = env.step(action)
             done = terminated or truncated
 
-        # Collect metrics from trade history
+        # Collect metrics from trade history (SimulatedTrade objects)
         trades = env.trade_history
-        wins = [t for t in trades if t > 0]
-        losses = [t for t in trades if t <= 0]
+        wins = [t for t in trades if t.pnl_pct > 0]
+        losses = [t for t in trades if t.pnl_pct <= 0]
 
         metrics = {
             "final_balance": env.balance,
             "total_return_%": (env.balance - self.initial_balance) / self.initial_balance * 100,
             "total_trades": len(trades),
-            "win_rate_%": len(wins) / len(trades) * 100 if trades else 0.0,
-            "avg_win_%": sum(wins) / len(wins) * 100 if wins else 0.0,
-            "avg_loss_%": sum(losses) / len(losses) * 100 if losses else 0.0,
-            "avg_trade_pnl_%": sum(trades) / len(trades) * 100 if trades else 0.0,
+            "win_rate_%": len(wins) / len(trades) * 100,
+            "avg_win_%": sum(t.pnl_pct for t in wins) / len(wins) * 100,
+            "avg_loss_%": sum(t.pnl_pct for t in losses) / len(losses) * 100,
+            "avg_trade_pnl_%": sum(t.pnl_pct for t in trades) / len(trades) * 100,
         }
 
         print(f"  Final Balance : ${metrics['final_balance']:.2f}  (Started: ${self.initial_balance:.2f})")
@@ -143,19 +240,14 @@ class ModelTrainer:
 
         return metrics
 
-    def __create_vector_environment_callback(self, df: pd.DataFrame) -> DummyVecEnv:
-        return DummyVecEnv([lambda: self.__create_environment(df)])
-
     def __create_environment(self, df: pd.DataFrame) -> TradingEnvironment:
         return TradingEnvironment(
             df=df,
-            symbol=self.symbol,
             window_size=self.window_size,
             features=self.features,
             initial_balance=self.initial_balance,
             risk_per_trade=self.risk_per_trade,
             fee_percent=self.fee_percent,
-            slippage_percent=self.slippage_percent,
             sl_multiplier=self.sl_multiplier,
             tp_multiplier=self.tp_multiplier,
         )
@@ -180,32 +272,3 @@ class ModelTrainer:
             verbose=1,
             # policy_kwargs=policy_kwargs,
         )
-
-    def __initialize_monitoring_and_logging(self) -> tuple[Run, CallbackList]:
-        run = wandb_init(
-            project=self.wandb_project,
-            config={
-                "learning_rate": self.learning_rate,
-                "n_steps": self.n_steps,
-                "batch_size": self.batch_size,
-                "n_epochs": self.n_epochs,
-                "gamma": self.gamma,
-                "gae_lambda": self.gae_lambda,
-                "ent_coef": self.ent_coef,
-                "sl_multiplier": self.sl_multiplier,
-                "tp_multiplier": self.tp_multiplier,
-                "window_size": self.window_size,
-                "n_features": len(self.features),
-            },
-            sync_tensorboard=False,
-            save_code=True,
-        )
-
-        callbacks = CallbackList(
-            [
-                TradeMetricsCallback(),
-                WandbCallback(gradient_save_freq=500, verbose=2),
-            ]
-        )
-
-        return run, callbacks

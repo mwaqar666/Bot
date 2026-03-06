@@ -18,6 +18,5 @@ dependencies:
   - ccxt-py
   - ta-lib
   - ipykernel
-  - wandb
   - pip:
     - pandas-ta-classic

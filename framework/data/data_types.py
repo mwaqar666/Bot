@@ -70,3 +70,18 @@ class TradeSignal:
     take_profit: float
     reason: str
     confidence: float = 1.0
+
+
+@dataclass
+class SimulatedTrade:
+    """
+    Stores per-step trade details from the RL trading environment.
+    Used for logging and evaluation metrics.
+    """
+
+    action: SignalDirection
+    entry_price: float
+    exit_price: float
+    sl_price: float
+    tp_price: float
+    pnl_pct: float
