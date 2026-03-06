@@ -12,12 +12,7 @@ logs
 # Genrated Graphs & Images
 *.png
 
-# Datasets
-*.csv
-
-# Trained Models
-*.zip
-
 # Genrated Python Files
 __pycache__
 *.pyc
+

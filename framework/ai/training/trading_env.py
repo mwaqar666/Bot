@@ -94,17 +94,20 @@ class TradingEnvironment(gym.Env):
 
         trade = None
         trade_pnl = 0.0
+        old_balance = self.balance
 
         if action != SignalDirection.HOLD:
             # 1. Initialize Trade Parameters
+            entry_price = open_price
+
             if action == SignalDirection.BUY:
                 side = PositionSide.LONG
-                sl_price = open_price - (atr * self.sl_multiplier)
-                tp_price = open_price + (atr * self.tp_multiplier)
+                sl_price = entry_price - (atr * self.sl_multiplier)
+                tp_price = entry_price + (atr * self.tp_multiplier)
             else:  # SignalDirection.SELL
                 side = PositionSide.SHORT
-                sl_price = open_price + (atr * self.sl_multiplier)
-                tp_price = open_price - (atr * self.tp_multiplier)
+                sl_price = entry_price + (atr * self.sl_multiplier)
+                tp_price = entry_price - (atr * self.tp_multiplier)
 
             # 2. Intra-candle SL/TP check
             exit_price = close_price
@@ -120,7 +123,7 @@ class TradingEnvironment(gym.Env):
                         exit_price = tp_price
 
                 # Profit/Loss Calculation
-                trade_pnl = (exit_price - open_price) / open_price
+                trade_pnl = (exit_price - entry_price) / entry_price
 
             else:  # SHORT
                 if high_price >= sl_price and low_price <= tp_price:
@@ -132,21 +135,18 @@ class TradingEnvironment(gym.Env):
                         exit_price = tp_price
 
                 # Profit/Loss Calculation
-                trade_pnl = (open_price - exit_price) / open_price
+                trade_pnl = (entry_price - exit_price) / entry_price
 
             # Apply Trading Fee
             trade_pnl -= self.fee_percent * 2  # Entry + Exit fee
 
-            # Update Balance (Simulating risking a portion of balance)
-            # For simplicity, we assume we trade with 'initial_balance * risk_per_trade'
-            # and the PnL applies to that portion.
             trade_amount = self.balance * self.risk_per_trade
             profit_loss = trade_amount * trade_pnl
             self.balance += profit_loss
 
             trade = SimulatedTrade(
                 action=action,
-                entry_price=open_price,
+                entry_price=entry_price,
                 exit_price=exit_price,
                 sl_price=sl_price,
                 tp_price=tp_price,
@@ -168,12 +168,13 @@ class TradingEnvironment(gym.Env):
         # 5. Get next observation
         obs = self.__next_observation()
 
-        # 6. Reward: Logarithmic Return
-        if action == SignalDirection.HOLD:
-            reward = -0.001
+        # 6. Reward
+        # For trade actions: use log equity growth for scale-invariant learning.
+        if action != SignalDirection.HOLD:
+            balance_ratio = max(self.balance / old_balance, 1e-12)
+            reward = float(np.log(balance_ratio))
         else:
-            clamped_pnl = max(trade_pnl, -0.9999)
-            reward = float(np.log1p(clamped_pnl))
+            reward = -0.01
 
         info = {
             "step": self.current_step,

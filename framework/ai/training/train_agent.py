@@ -1,10 +1,11 @@
 import pandas as pd
 import numpy as np
-from IPython.display import clear_output
-import matplotlib.pyplot as plt
+from pathlib import Path
+from torch.utils.tensorboard import SummaryWriter
 from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv
+from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, SubprocVecEnv
 from stable_baselines3.common.callbacks import CallbackList, BaseCallback
+from stable_baselines3.common.logger import TensorBoardOutputFormat, configure
 
 from framework.ai.training.trading_env import TradingEnvironment
 
@@ -13,9 +14,17 @@ class TradeMetricsCallback(BaseCallback):
     def __init__(self, plot_every: int = 2048) -> None:
         super().__init__()
         self.plot_every = plot_every
+        self.tb_writer: SummaryWriter | None = None
         self.timesteps: list[int] = []
         self.history_cols: list[str] = ["action", "reward", "balance", "trade_pnl", "entry_price", "exit_price", "sl_price", "tp_price"]
         self.history: dict[str, list] = {col: [] for col in self.history_cols}
+
+    def _on_training_start(self) -> None:
+        # Discover the TensorBoard writer created by SB3 (if tensorboard_log is enabled).
+        for output_format in self.logger.output_formats:
+            if isinstance(output_format, TensorBoardOutputFormat):
+                self.tb_writer = output_format.writer
+                break
 
     def _on_step(self) -> bool:
         for info in self.locals.get("infos", []):
@@ -27,13 +36,19 @@ class TradeMetricsCallback(BaseCallback):
                 self.logger.record(f"trade/{col}", value)
 
         if self.num_timesteps % self.plot_every == 0:
-            self._refresh_plot()
+            self._log_tensorboard_dashboard()
 
         return True
 
-    def _refresh_plot(self) -> None:
+    def _on_training_end(self) -> None:
+        # Ensure we always log the final dashboard snapshot even if
+        # total_timesteps is not a multiple of plot_every.
+        self._log_tensorboard_dashboard()
 
-        ts = np.array(self.timesteps)
+    def _log_tensorboard_dashboard(self) -> None:
+        if self.tb_writer is None:
+            return
+
         actions = np.array(self.history["action"])
         balance = np.array(self.history["balance"])
         trade_pnl = np.array(self.history["trade_pnl"])
@@ -51,51 +66,33 @@ class TradeMetricsCallback(BaseCallback):
         tp_hit = trade_mask & np.isclose(exit_prices, tp_prices, rtol=1e-6)
         close_hit = trade_mask & ~sl_hit & ~tp_hit
 
-        clear_output(wait=True)
-        fig, axes = plt.subplots(3, 2, figsize=(16, 12))
-        fig.suptitle(f"Training Dashboard — Step {self.num_timesteps:,} | Trades: {trade_mask.sum()} | Win Rate: {len(wins) / max(trade_mask.sum(), 1) * 100:.1f}%", fontsize=13)
+        total_trades = int(trade_mask.sum())
+        win_rate = (len(wins) / max(total_trades, 1)) * 100.0
+        action_counts = np.array([(actions == i).sum() for i in range(3)], dtype=np.float64)
+        action_ratios = action_counts / max(action_counts.sum(), 1.0)
 
-        # 1. Balance over time
-        axes[0, 0].plot(ts, balance, linewidth=0.8, color="steelblue")
-        axes[0, 0].set_title("Balance ($)")
-        axes[0, 0].set_ylabel("$")
+        # Scalar summaries mirroring the previous dashboard.
+        self.tb_writer.add_scalar("dashboard/balance_last", float(balance[-1]) if len(balance) else 0.0, self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/win_rate_pct", float(win_rate), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/action_ratio_buy", float(action_ratios[0]), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/action_ratio_sell", float(action_ratios[1]), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/action_ratio_hold", float(action_ratios[2]), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/exit_count_sl", float(sl_hit.sum()), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/exit_count_tp", float(tp_hit.sum()), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/exit_count_close", float(close_hit.sum()), self.num_timesteps)
 
-        # 2. Per-trade PnL scatter (green=win, red=loss)
-        colours = ["green" if p > 0 else "red" for p in trade_pnl[trade_mask]]
-        axes[0, 1].scatter(ts[trade_mask], trade_pnl[trade_mask], s=2, alpha=0.4, c=colours)
-        axes[0, 1].axhline(0, color="black", linewidth=0.8, linestyle="--")
-        axes[0, 1].set_title("Trade PnL per Step (%)")
+        if total_trades > 0:
+            cum_pnl = np.cumsum(trade_pnl[trade_mask])
+            self.tb_writer.add_scalar("dashboard/cumulative_trade_pnl", float(cum_pnl[-1]), self.num_timesteps)
+            self.tb_writer.add_scalar("dashboard/trade_pnl_mean", float(np.mean(trade_pnl[trade_mask])), self.num_timesteps)
+            self.tb_writer.add_scalar("dashboard/trade_pnl_std", float(np.std(trade_pnl[trade_mask])), self.num_timesteps)
 
-        # 3. Action distribution
-        action_labels = ["BUY", "SELL", "HOLD"]
-        action_counts = [(actions == i).sum() for i in range(3)]
-        axes[1, 0].bar(action_labels, action_counts, color=["green", "red", "grey"])
-        axes[1, 0].set_title("Action Distribution")
-        axes[1, 0].set_ylabel("Count")
-
-        # 4. Win / loss histogram
-        axes[1, 1].hist(wins, bins=30, color="green", alpha=0.6, label=f"Wins ({len(wins)})")
-        axes[1, 1].hist(losses, bins=30, color="red", alpha=0.6, label=f"Losses ({len(losses)})")
-        axes[1, 1].axvline(0, color="black", linewidth=0.8)
-        axes[1, 1].set_title("Win / Loss Distribution")
-        axes[1, 1].set_xlabel("PnL (%)")
-        axes[1, 1].legend()
-
-        # 5. Exit reason (SL / TP / Closed at candle close)
-        exit_counts = [sl_hit.sum(), tp_hit.sum(), close_hit.sum()]
-        axes[2, 0].bar(["SL Hit", "TP Hit", "Candle Close"], exit_counts, color=["red", "green", "steelblue"])
-        axes[2, 0].set_title("Exit Reason")
-        axes[2, 0].set_ylabel("Count")
-
-        # 6. Cumulative trade PnL
-        cum_pnl = np.cumsum(trade_pnl[trade_mask])
-        axes[2, 1].plot(range(len(cum_pnl)), cum_pnl, color="purple", linewidth=0.8)
-        axes[2, 1].axhline(0, color="black", linewidth=0.8, linestyle="--")
-        axes[2, 1].set_title("Cumulative Trade PnL")
-        axes[2, 1].set_xlabel("Trade #")
-
-        plt.tight_layout()
-        plt.show()
+            # Histograms for trade quality analysis.
+            self.tb_writer.add_histogram("dashboard/trade_pnl_hist", trade_pnl[trade_mask], self.num_timesteps)
+            if len(wins) > 0:
+                self.tb_writer.add_histogram("dashboard/wins_hist", wins, self.num_timesteps)
+            if len(losses) > 0:
+                self.tb_writer.add_histogram("dashboard/losses_hist", losses, self.num_timesteps)
 
 
 class ModelTrainer:
@@ -110,13 +107,21 @@ class ModelTrainer:
         tp_multiplier: float = 2.0,
         window_size: int = 1,
         total_timesteps: int = 1_000_000,
-        learning_rate=3e-4,
-        n_steps=2048,
-        batch_size=64,
-        n_epochs=10,
-        gamma=0.99,
-        gae_lambda=0.95,
-        ent_coef=0.01,
+        learning_rate: float = 3e-4,
+        n_steps: int = 2048,
+        batch_size: int = 64,
+        n_epochs: int = 10,
+        gamma: float = 0.99,
+        gae_lambda: float = 0.95,
+        ent_coef: float = 0.01,
+        n_envs: int = 1,
+        vec_env_type: str = "dummy",
+        device: str = "auto",
+        plot_every: int = 2048,
+        model_verbose: int = 1,
+        tensorboard_log: str = "framework/ai/training/tensorboard",
+        tb_log_name: str = "PPO",
+        log_interval: int = 1,
     ) -> None:
         self.features = features
         self.model_save_path = model_save_path
@@ -137,24 +142,44 @@ class ModelTrainer:
         self.gae_lambda = gae_lambda
         self.ent_coef = ent_coef
 
+        # Performance and runtime controls
+        self.n_envs = max(1, n_envs)
+        self.vec_env_type = vec_env_type.lower()
+        self.device = device
+        self.plot_every = plot_every
+        self.model_verbose = model_verbose
+        self.tensorboard_log = tensorboard_log
+        self.tb_log_name = tb_log_name
+        self.log_interval = log_interval
+
     def train(self, train_df: pd.DataFrame) -> None:
         print(f"Training on {len(self.features)} Features: {self.features}")
 
-        # 1. Create Environment (Training on Train Set)
-        env = DummyVecEnv([lambda: self.__create_environment(train_df)])
+        # 1. Create Vectorized Environment (Training on Train Set)
+        env = self.__create_vectorized_environment(train_df)
 
         # 2. Initialize PPO
         print("Initializing PPO Agent...")
 
         model = self.__create_model(env)
 
+        # Persist SB3 training metrics (including console table fields) to CSV and TensorBoard.
+        run_log_dir = Path(self.tensorboard_log) / self.tb_log_name
+        run_log_dir.mkdir(parents=True, exist_ok=True)
+        model.set_logger(configure(str(run_log_dir), ["stdout", "csv", "tensorboard"]))
+
         # 3. Create TradeMetrics Callback
-        callback_list = CallbackList([TradeMetricsCallback()])
+        callback_list = CallbackList([TradeMetricsCallback(plot_every=self.plot_every)])
 
         # 4. Train
         print(f"Training for {self.total_timesteps} steps...")
         try:
-            model.learn(total_timesteps=self.total_timesteps, callback=callback_list)
+            model.learn(
+                total_timesteps=self.total_timesteps,
+                callback=callback_list,
+                tb_log_name=self.tb_log_name,
+                log_interval=self.log_interval,
+            )
         except KeyboardInterrupt:
             print("Training interrupted manually. Saving current model...")
 
@@ -199,10 +224,10 @@ class ModelTrainer:
             "final_balance": env.balance,
             "total_return_%": (env.balance - self.initial_balance) / self.initial_balance * 100,
             "total_trades": len(trades),
-            "win_rate_%": len(wins) / len(trades) * 100,
-            "avg_win_%": sum(t.pnl_pct for t in wins) / len(wins) * 100,
-            "avg_loss_%": sum(t.pnl_pct for t in losses) / len(losses) * 100,
-            "avg_trade_pnl_%": sum(t.pnl_pct for t in trades) / len(trades) * 100,
+            "win_rate_%": (len(wins) / len(trades) * 100) if len(trades) > 0 else 0.0,
+            "avg_win_%": (sum(t.pnl_pct for t in wins) / len(wins) * 100) if len(wins) > 0 else 0.0,
+            "avg_loss_%": (sum(t.pnl_pct for t in losses) / len(losses) * 100) if len(losses) > 0 else 0.0,
+            "avg_trade_pnl_%": (sum(t.pnl_pct for t in trades) / len(trades) * 100) if len(trades) > 0 else 0.0,
         }
 
         print(f"  Final Balance : ${metrics['final_balance']:.2f}  (Started: ${self.initial_balance:.2f})")
@@ -215,6 +240,14 @@ class ModelTrainer:
         print("-----------------------------------")
 
         return metrics
+
+    def __create_vectorized_environment(self, df: pd.DataFrame) -> VecEnv:
+        if self.n_envs == 1 or self.vec_env_type != "subproc":
+            return DummyVecEnv([lambda: self.__create_environment(df)])
+
+        # Use subprocess-based vectorization for higher throughput on CPU-bound env stepping.
+        env_fns = [lambda d=df: self.__create_environment(d) for _ in range(self.n_envs)]
+        return SubprocVecEnv(env_fns)
 
     def __create_environment(self, df: pd.DataFrame) -> TradingEnvironment:
         return TradingEnvironment(
@@ -245,6 +278,8 @@ class ModelTrainer:
             gamma=self.gamma,
             gae_lambda=self.gae_lambda,
             ent_coef=self.ent_coef,
-            verbose=1,
+            tensorboard_log=self.tensorboard_log,
+            device=self.device,
+            verbose=self.model_verbose,
             # policy_kwargs=policy_kwargs,
         )

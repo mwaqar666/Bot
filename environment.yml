@@ -18,5 +18,7 @@ dependencies:
   - ccxt-py
   - ta-lib
   - ipykernel
+  - setuptools==81
+  - tensorboard
   - pip:
     - pandas-ta-classic
