@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
@@ -9,44 +10,21 @@ from framework.ai.training.trading_env import TradingEnvironment
 
 
 class TradeMetricsCallback(BaseCallback):
-    """
-    Stores trading metrics from the environment's info dict and renders
-    a live 3×2 dashboard every `plot_every` timesteps during training.
-    """
-
-    _TRADE_COLS: list[str] = [
-        "balance",
-        "trade_pnl",
-        "action",
-        "entry_price",
-        "exit_price",
-        "sl_price",
-        "tp_price",
-    ]
-
     def __init__(self, plot_every: int = 2048) -> None:
-        """
-        Initializes the callback with an empty history and plot interval.
-
-        Args:
-            plot_every (int): Refresh the dashboard every N timesteps.
-
-        Returns:
-            None
-        """
         super().__init__()
         self.plot_every = plot_every
         self.timesteps: list[int] = []
-        self.history: dict[str, list] = {col: [] for col in self._TRADE_COLS}
+        self.history_cols: list[str] = ["action", "reward", "balance", "trade_pnl", "entry_price", "exit_price", "sl_price", "tp_price"]
+        self.history: dict[str, list] = {col: [] for col in self.history_cols}
 
     def _on_step(self) -> bool:
         for info in self.locals.get("infos", []):
             self.timesteps.append(self.num_timesteps)
-            for col in self._TRADE_COLS:
-                self.history[col].append(info.get(col, 0))
-            for key, val in info.items():
-                if key != "step":
-                    self.logger.record(f"trade/{key}", val)
+
+            for col in self.history_cols:
+                value = info.get(col, 0)
+                self.history[col].append(value)
+                self.logger.record(f"trade/{col}", value)
 
         if self.num_timesteps % self.plot_every == 0:
             self._refresh_plot()
@@ -54,18 +32,11 @@ class TradeMetricsCallback(BaseCallback):
         return True
 
     def _refresh_plot(self) -> None:
-        """
-        Clears the Jupyter cell output and renders a 3×2 training dashboard.
-
-        Returns:
-            None
-        """
-        import numpy as np
 
         ts = np.array(self.timesteps)
+        actions = np.array(self.history["action"])
         balance = np.array(self.history["balance"])
         trade_pnl = np.array(self.history["trade_pnl"])
-        actions = np.array(self.history["action"])
         exit_prices = np.array(self.history["exit_price"])
         sl_prices = np.array(self.history["sl_price"])
         tp_prices = np.array(self.history["tp_price"])
@@ -82,10 +53,7 @@ class TradeMetricsCallback(BaseCallback):
 
         clear_output(wait=True)
         fig, axes = plt.subplots(3, 2, figsize=(16, 12))
-        fig.suptitle(
-            f"Training Dashboard — Step {self.num_timesteps:,} | Trades: {trade_mask.sum()} | Win Rate: {len(wins) / max(trade_mask.sum(), 1) * 100:.1f}%",
-            fontsize=13,
-        )
+        fig.suptitle(f"Training Dashboard — Step {self.num_timesteps:,} | Trades: {trade_mask.sum()} | Win Rate: {len(wins) / max(trade_mask.sum(), 1) * 100:.1f}%", fontsize=13)
 
         # 1. Balance over time
         axes[0, 0].plot(ts, balance, linewidth=0.8, color="steelblue")
@@ -115,7 +83,7 @@ class TradeMetricsCallback(BaseCallback):
 
         # 5. Exit reason (SL / TP / Closed at candle close)
         exit_counts = [sl_hit.sum(), tp_hit.sum(), close_hit.sum()]
-        axes[2, 0].bar(["SL Hit", "TP Hit", "Closed @ Close"], exit_counts, color=["red", "green", "steelblue"])
+        axes[2, 0].bar(["SL Hit", "TP Hit", "Candle Close"], exit_counts, color=["red", "green", "steelblue"])
         axes[2, 0].set_title("Exit Reason")
         axes[2, 0].set_ylabel("Count")
 
@@ -142,6 +110,13 @@ class ModelTrainer:
         tp_multiplier: float = 2.0,
         window_size: int = 1,
         total_timesteps: int = 1_000_000,
+        learning_rate=3e-4,
+        n_steps=2048,
+        batch_size=64,
+        n_epochs=10,
+        gamma=0.99,
+        gae_lambda=0.95,
+        ent_coef=0.01,
     ) -> None:
         self.features = features
         self.model_save_path = model_save_path
@@ -153,13 +128,14 @@ class ModelTrainer:
         self.window_size = window_size
         self.total_timesteps = total_timesteps
 
-        self.learning_rate = 3e-4
-        self.n_steps = 2048
-        self.batch_size = 64
-        self.n_epochs = 10
-        self.gamma = 0.99
-        self.gae_lambda = 0.95
-        self.ent_coef = 0.01
+        # Model hyperparameters
+        self.learning_rate = learning_rate
+        self.n_steps = n_steps
+        self.batch_size = batch_size
+        self.n_epochs = n_epochs
+        self.gamma = gamma
+        self.gae_lambda = gae_lambda
+        self.ent_coef = ent_coef
 
     def train(self, train_df: pd.DataFrame) -> None:
         print(f"Training on {len(self.features)} Features: {self.features}")
