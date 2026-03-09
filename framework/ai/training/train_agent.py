@@ -4,9 +4,10 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, SubprocVecEnv
-from stable_baselines3.common.callbacks import CallbackList, BaseCallback
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, BaseCallback
 from stable_baselines3.common.logger import TensorBoardOutputFormat, configure
 
+from framework.data.data_types import SignalDirection
 from framework.ai.training.trading_env import TradingEnvironment
 
 
@@ -14,9 +15,10 @@ class TradeMetricsCallback(BaseCallback):
     def __init__(self, plot_every: int = 2048) -> None:
         super().__init__()
         self.plot_every = plot_every
-        self.tb_writer: SummaryWriter | None = None
         self.timesteps: list[int] = []
-        self.history_cols: list[str] = ["action", "reward", "balance", "trade_pnl", "entry_price", "exit_price", "sl_price", "tp_price"]
+
+        self.tb_writer: SummaryWriter | None = None
+        self.history_cols: list[str] = ["action", "balance", "trade_pnl", "entry_price", "exit_price", "sl_price", "tp_price"]
         self.history: dict[str, list] = {col: [] for col in self.history_cols}
 
     def _on_training_start(self) -> None:
@@ -52,12 +54,13 @@ class TradeMetricsCallback(BaseCallback):
         actions = np.array(self.history["action"])
         balance = np.array(self.history["balance"])
         trade_pnl = np.array(self.history["trade_pnl"])
+        entry_prices = np.array(self.history["entry_price"])
         exit_prices = np.array(self.history["exit_price"])
         sl_prices = np.array(self.history["sl_price"])
         tp_prices = np.array(self.history["tp_price"])
 
         # Mask for actual trades (HOLD = 2 produces no trade)
-        trade_mask = actions != 2
+        trade_mask = actions != SignalDirection.HOLD
         wins = trade_pnl[trade_mask & (trade_pnl > 0)]
         losses = trade_pnl[trade_mask & (trade_pnl <= 0)]
 
@@ -99,7 +102,6 @@ class ModelTrainer:
     def __init__(
         self,
         features: list[str],
-        model_save_path: str,
         initial_balance: float = 10_000,
         risk_per_trade: float = 0.01,
         fee_percent: float = 0.001,
@@ -118,7 +120,7 @@ class ModelTrainer:
         vec_env_type: str = "dummy",
         device: str = "auto",
         plot_every: int = 2048,
-        model_verbose: int = 1,
+        model_save_path: str = "framework/ai/models",
         tensorboard_log: str = "framework/ai/training/tensorboard",
         tb_log_name: str = "PPO",
         log_interval: int = 1,
@@ -147,7 +149,6 @@ class ModelTrainer:
         self.vec_env_type = vec_env_type.lower()
         self.device = device
         self.plot_every = plot_every
-        self.model_verbose = model_verbose
         self.tensorboard_log = tensorboard_log
         self.tb_log_name = tb_log_name
         self.log_interval = log_interval
@@ -162,11 +163,6 @@ class ModelTrainer:
         print("Initializing PPO Agent...")
 
         model = self.__create_model(env)
-
-        # Persist SB3 training metrics (including console table fields) to CSV and TensorBoard.
-        run_log_dir = Path(self.tensorboard_log) / self.tb_log_name
-        run_log_dir.mkdir(parents=True, exist_ok=True)
-        model.set_logger(configure(str(run_log_dir), ["stdout", "csv", "tensorboard"]))
 
         # 3. Create TradeMetrics Callback
         callback_list = CallbackList([TradeMetricsCallback(plot_every=self.plot_every)])
@@ -268,7 +264,7 @@ class ModelTrainer:
         #     net_arch=dict(pi=[32, 32], vf=[32, 32]),
         # )
 
-        return PPO(
+        model = PPO(
             "MlpPolicy",
             environment,
             learning_rate=self.learning_rate,
@@ -278,8 +274,24 @@ class ModelTrainer:
             gamma=self.gamma,
             gae_lambda=self.gae_lambda,
             ent_coef=self.ent_coef,
-            tensorboard_log=self.tensorboard_log,
             device=self.device,
-            verbose=self.model_verbose,
             # policy_kwargs=policy_kwargs,
         )
+
+        # Persist SB3 training metrics (including console table fields) to CSV and TensorBoard.
+        log_dir = Path(self.tensorboard_log) / self.tb_log_name
+        log_dir.mkdir(parents=True, exist_ok=True)
+        model.set_logger(configure(str(log_dir), ["stdout", "csv", "tensorboard"]))
+
+        return model
+
+    def __create_callback_list(self) -> CallbackList:
+        trade_metrics = TradeMetricsCallback(plot_every=self.plot_every)
+
+        checkpoint = CheckpointCallback(
+            save_freq=self.checkpoint_timesteps,
+            save_path=str(Path(self.model_save_path + "_ckpt")),
+            name_prefix="model",
+        )
+
+        return CallbackList([trade_metrics, checkpoint])
