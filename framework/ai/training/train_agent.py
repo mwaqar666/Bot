@@ -1,10 +1,11 @@
+from os import cpu_count
 import pandas as pd
 import numpy as np
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, SubprocVecEnv
-from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, BaseCallback
+from stable_baselines3.common.callbacks import CallbackList, BaseCallback
 from stable_baselines3.common.logger import TensorBoardOutputFormat, configure
 
 from framework.data.data_types import SignalDirection
@@ -54,7 +55,6 @@ class TradeMetricsCallback(BaseCallback):
         actions = np.array(self.history["action"])
         balance = np.array(self.history["balance"])
         trade_pnl = np.array(self.history["trade_pnl"])
-        entry_prices = np.array(self.history["entry_price"])
         exit_prices = np.array(self.history["exit_price"])
         sl_prices = np.array(self.history["sl_price"])
         tp_prices = np.array(self.history["tp_price"])
@@ -71,15 +71,17 @@ class TradeMetricsCallback(BaseCallback):
 
         total_trades = int(trade_mask.sum())
         win_rate = (len(wins) / max(total_trades, 1)) * 100.0
-        action_counts = np.array([(actions == i).sum() for i in range(3)], dtype=np.float64)
+        loss_rate = (len(losses) / max(total_trades, 1)) * 100.0
+        action_counts = np.array([(actions == i).sum() for i in range(len(SignalDirection))], dtype=np.float64)
         action_ratios = action_counts / max(action_counts.sum(), 1.0)
 
         # Scalar summaries mirroring the previous dashboard.
         self.tb_writer.add_scalar("dashboard/balance_last", float(balance[-1]) if len(balance) else 0.0, self.num_timesteps)
         self.tb_writer.add_scalar("dashboard/win_rate_pct", float(win_rate), self.num_timesteps)
-        self.tb_writer.add_scalar("dashboard/action_ratio_buy", float(action_ratios[0]), self.num_timesteps)
-        self.tb_writer.add_scalar("dashboard/action_ratio_sell", float(action_ratios[1]), self.num_timesteps)
-        self.tb_writer.add_scalar("dashboard/action_ratio_hold", float(action_ratios[2]), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/loss_rate_pct", float(loss_rate), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/action_ratio_buy", float(action_ratios[SignalDirection.BUY]), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/action_ratio_sell", float(action_ratios[SignalDirection.SELL]), self.num_timesteps)
+        self.tb_writer.add_scalar("dashboard/action_ratio_hold", float(action_ratios[SignalDirection.HOLD]), self.num_timesteps)
         self.tb_writer.add_scalar("dashboard/exit_count_sl", float(sl_hit.sum()), self.num_timesteps)
         self.tb_writer.add_scalar("dashboard/exit_count_tp", float(tp_hit.sum()), self.num_timesteps)
         self.tb_writer.add_scalar("dashboard/exit_count_close", float(close_hit.sum()), self.num_timesteps)
@@ -88,12 +90,13 @@ class TradeMetricsCallback(BaseCallback):
             cum_pnl = np.cumsum(trade_pnl[trade_mask])
             self.tb_writer.add_scalar("dashboard/cumulative_trade_pnl", float(cum_pnl[-1]), self.num_timesteps)
             self.tb_writer.add_scalar("dashboard/trade_pnl_mean", float(np.mean(trade_pnl[trade_mask])), self.num_timesteps)
-            self.tb_writer.add_scalar("dashboard/trade_pnl_std", float(np.std(trade_pnl[trade_mask])), self.num_timesteps)
 
             # Histograms for trade quality analysis.
             self.tb_writer.add_histogram("dashboard/trade_pnl_hist", trade_pnl[trade_mask], self.num_timesteps)
+
             if len(wins) > 0:
                 self.tb_writer.add_histogram("dashboard/wins_hist", wins, self.num_timesteps)
+
             if len(losses) > 0:
                 self.tb_writer.add_histogram("dashboard/losses_hist", losses, self.num_timesteps)
 
@@ -108,7 +111,6 @@ class ModelTrainer:
         sl_multiplier: float = 1.0,
         tp_multiplier: float = 2.0,
         window_size: int = 1,
-        total_timesteps: int = 1_000_000,
         learning_rate: float = 3e-4,
         n_steps: int = 2048,
         batch_size: int = 64,
@@ -116,14 +118,12 @@ class ModelTrainer:
         gamma: float = 0.99,
         gae_lambda: float = 0.95,
         ent_coef: float = 0.01,
-        n_envs: int = 1,
         vec_env_type: str = "dummy",
         device: str = "auto",
         plot_every: int = 2048,
         model_save_path: str = "framework/ai/models",
         tensorboard_log: str = "framework/ai/training/tensorboard",
         tb_log_name: str = "PPO",
-        log_interval: int = 1,
     ) -> None:
         self.features = features
         self.model_save_path = model_save_path
@@ -133,7 +133,6 @@ class ModelTrainer:
         self.sl_multiplier = sl_multiplier
         self.tp_multiplier = tp_multiplier
         self.window_size = window_size
-        self.total_timesteps = total_timesteps
 
         # Model hyperparameters
         self.learning_rate = learning_rate
@@ -145,44 +144,42 @@ class ModelTrainer:
         self.ent_coef = ent_coef
 
         # Performance and runtime controls
-        self.n_envs = max(1, n_envs)
         self.vec_env_type = vec_env_type.lower()
         self.device = device
         self.plot_every = plot_every
         self.tensorboard_log = tensorboard_log
         self.tb_log_name = tb_log_name
-        self.log_interval = log_interval
 
-    def train(self, train_df: pd.DataFrame) -> None:
-        print(f"Training on {len(self.features)} Features: {self.features}")
-
+    def train(self, train_df: pd.DataFrame, resume_timestep: int = 0) -> None:
         # 1. Create Vectorized Environment (Training on Train Set)
-        env = self.__create_vectorized_environment(train_df)
+        env, n_envs = self.__create_vectorized_environment(train_df)
 
-        # 2. Initialize PPO
-        print("Initializing PPO Agent...")
+        # 2. Calculate total_timesteps based on training data size and vectorization settings.
+        total_timesteps = self.__calculate_timesteps(train_df, n_envs, resume_timestep)
 
+        print(f"Training on {len(self.features)} features for {total_timesteps} steps.")
+
+        # 3. Initialize On-Policy RL Model
         model = self.__create_model(env)
 
-        # 3. Create TradeMetrics Callback
-        callback_list = CallbackList([TradeMetricsCallback(plot_every=self.plot_every)])
+        # 4. Create TradeMetrics Callback
+        callback_list = self.__create_callback_list()
 
-        # 4. Train
-        print(f"Training for {self.total_timesteps} steps...")
+        # 5. Train
+        print(f"Training for {total_timesteps} steps...")
         try:
             model.learn(
-                total_timesteps=self.total_timesteps,
+                total_timesteps=total_timesteps,
                 callback=callback_list,
                 tb_log_name=self.tb_log_name,
-                log_interval=self.log_interval,
             )
-        except KeyboardInterrupt:
-            print("Training interrupted manually. Saving current model...")
 
-        # 5. Save
-        print(f"Saving model to {self.model_save_path}...")
-        model.save(self.model_save_path)
-        print("Training complete.")
+            # 6. Save
+            model.save(self.model_save_path)
+
+            print(f"Training completed. Model saved to {self.model_save_path}.")
+        except KeyboardInterrupt:
+            print("Training interrupted manually. Skipping model save...")
 
     def evaluate(self, df: pd.DataFrame, label: str = "Validation") -> dict:
         """
@@ -237,13 +234,26 @@ class ModelTrainer:
 
         return metrics
 
-    def __create_vectorized_environment(self, df: pd.DataFrame) -> VecEnv:
-        if self.n_envs == 1 or self.vec_env_type != "subproc":
-            return DummyVecEnv([lambda: self.__create_environment(df)])
+    def __calculate_timesteps(self, train_df: pd.DataFrame, n_envs: int, resume_timestep: int = 0) -> int:
+        num_candles = len(train_df) - self.window_size
+        steps_per_env = num_candles * 1.2
+
+        raw_total = steps_per_env * n_envs
+        rolout_size = self.n_steps * n_envs
+
+        total_timesteps = (raw_total // rolout_size) * rolout_size
+
+        return total_timesteps
+
+    def __create_vectorized_environment(self, df: pd.DataFrame) -> tuple[VecEnv, int]:
+        if self.vec_env_type != "subproc":
+            return DummyVecEnv([lambda: self.__create_environment(df)]), 1
+
+        n_envs = cpu_count()
 
         # Use subprocess-based vectorization for higher throughput on CPU-bound env stepping.
-        env_fns = [lambda d=df: self.__create_environment(d) for _ in range(self.n_envs)]
-        return SubprocVecEnv(env_fns)
+        env_fns = [lambda d=df: self.__create_environment(d) for _ in range(n_envs)]
+        return SubprocVecEnv(env_fns), n_envs
 
     def __create_environment(self, df: pd.DataFrame) -> TradingEnvironment:
         return TradingEnvironment(
@@ -288,10 +298,4 @@ class ModelTrainer:
     def __create_callback_list(self) -> CallbackList:
         trade_metrics = TradeMetricsCallback(plot_every=self.plot_every)
 
-        checkpoint = CheckpointCallback(
-            save_freq=self.checkpoint_timesteps,
-            save_path=str(Path(self.model_save_path + "_ckpt")),
-            name_prefix="model",
-        )
-
-        return CallbackList([trade_metrics, checkpoint])
+        return CallbackList([trade_metrics])
