@@ -1,4 +1,3 @@
-from os import cpu_count
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -120,6 +119,7 @@ class ModelTrainer:
         ent_coef: float = 0.01,
         vec_env_type: str = "dummy",
         device: str = "auto",
+        n_envs: int = 1,
         plot_every: int = 2048,
         model_save_path: str = "framework/ai/models",
         tensorboard_log: str = "framework/ai/training/tensorboard",
@@ -146,16 +146,17 @@ class ModelTrainer:
         # Performance and runtime controls
         self.vec_env_type = vec_env_type.lower()
         self.device = device
+        self.n_envs = n_envs
         self.plot_every = plot_every
         self.tensorboard_log = tensorboard_log
         self.tb_log_name = tb_log_name
 
-    def train(self, train_df: pd.DataFrame, resume_timestep: int = 0) -> None:
+    def train(self, train_df: pd.DataFrame) -> None:
         # 1. Create Vectorized Environment (Training on Train Set)
-        env, n_envs = self.__create_vectorized_environment(train_df)
+        env = self.__create_vectorized_environment(train_df)
 
         # 2. Calculate total_timesteps based on training data size and vectorization settings.
-        total_timesteps = self.__calculate_timesteps(train_df, n_envs, resume_timestep)
+        total_timesteps = self.__calculate_timesteps(train_df)
 
         print(f"Training on {len(self.features)} features for {total_timesteps} steps.")
 
@@ -168,11 +169,7 @@ class ModelTrainer:
         # 5. Train
         print(f"Training for {total_timesteps} steps...")
         try:
-            model.learn(
-                total_timesteps=total_timesteps,
-                callback=callback_list,
-                tb_log_name=self.tb_log_name,
-            )
+            model.learn(total_timesteps=total_timesteps, callback=callback_list, tb_log_name=self.tb_log_name)
 
             # 6. Save
             model.save(self.model_save_path)
@@ -234,38 +231,26 @@ class ModelTrainer:
 
         return metrics
 
-    def __calculate_timesteps(self, train_df: pd.DataFrame, n_envs: int, resume_timestep: int = 0) -> int:
+    def __create_vectorized_environment(self, df: pd.DataFrame) -> VecEnv:
+        if self.vec_env_type == "dummy" and self.n_envs == 1:
+            return DummyVecEnv([lambda: self.__create_environment(df)])
+
+        if self.vec_env_type == "subproc" and self.n_envs > 1:
+            env_fns = [lambda d=df: self.__create_environment(d) for _ in range(self.n_envs)]
+            return SubprocVecEnv(env_fns)
+
+        raise ValueError(f"Unsupported vec_env_type: {self.vec_env_type}")
+
+    def __calculate_timesteps(self, train_df: pd.DataFrame) -> int:
         num_candles = len(train_df) - self.window_size
         steps_per_env = num_candles * 1.2
 
-        raw_total = steps_per_env * n_envs
-        rolout_size = self.n_steps * n_envs
+        raw_total = steps_per_env * self.n_envs
+        rolout_size = self.n_steps * self.n_envs
 
         total_timesteps = (raw_total // rolout_size) * rolout_size
 
         return total_timesteps
-
-    def __create_vectorized_environment(self, df: pd.DataFrame) -> tuple[VecEnv, int]:
-        if self.vec_env_type != "subproc":
-            return DummyVecEnv([lambda: self.__create_environment(df)]), 1
-
-        n_envs = cpu_count()
-
-        # Use subprocess-based vectorization for higher throughput on CPU-bound env stepping.
-        env_fns = [lambda d=df: self.__create_environment(d) for _ in range(n_envs)]
-        return SubprocVecEnv(env_fns), n_envs
-
-    def __create_environment(self, df: pd.DataFrame) -> TradingEnvironment:
-        return TradingEnvironment(
-            df=df,
-            window_size=self.window_size,
-            features=self.features,
-            initial_balance=self.initial_balance,
-            risk_per_trade=self.risk_per_trade,
-            fee_percent=self.fee_percent,
-            sl_multiplier=self.sl_multiplier,
-            tp_multiplier=self.tp_multiplier,
-        )
 
     def __create_model(self, environment: VecEnv) -> PPO:
         # policy_kwargs = dict(
@@ -294,6 +279,18 @@ class ModelTrainer:
         model.set_logger(configure(str(log_dir), ["stdout", "csv", "tensorboard"]))
 
         return model
+
+    def __create_environment(self, df: pd.DataFrame) -> TradingEnvironment:
+        return TradingEnvironment(
+            df=df,
+            window_size=self.window_size,
+            features=self.features,
+            initial_balance=self.initial_balance,
+            risk_per_trade=self.risk_per_trade,
+            fee_percent=self.fee_percent,
+            sl_multiplier=self.sl_multiplier,
+            tp_multiplier=self.tp_multiplier,
+        )
 
     def __create_callback_list(self) -> CallbackList:
         trade_metrics = TradeMetricsCallback(plot_every=self.plot_every)
